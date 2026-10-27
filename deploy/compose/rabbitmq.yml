@@ -1,0 +1,33 @@
+# RabbitMQ carries outbox events from the API to webhook delivery and to any other subscriber
+# (ADR 0031). Optional: without it each API instance delivers webhooks straight from the outbox.
+# The outbox stays the source of truth, so nothing is lost if RabbitMQ is: events wait there.
+#
+#   docker compose -f docker-compose.yml -f deploy/compose/rabbitmq.yml up -d --build
+#
+# The management UI is on http://localhost:15672 (user zirnis, ZIRNIS_RABBITMQ_PASSWORD).
+services:
+  rabbitmq:
+    image: rabbitmq:4.4.0-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: zirnis
+      RABBITMQ_DEFAULT_PASS: ${ZIRNIS_RABBITMQ_PASSWORD:-zirnis-local-only}
+    ports:
+      - "127.0.0.1:15672:15672" # management UI, this machine only
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq # queued messages survive a restart
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+    restart: unless-stopped
+
+  api:
+    environment:
+      ZIRNIS_RABBITMQ_URL: ${ZIRNIS_RABBITMQ_URL:-amqp://zirnis:${ZIRNIS_RABBITMQ_PASSWORD:-zirnis-local-only}@rabbitmq:5672/}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  rabbitmq-data:

@@ -1,4 +1,4 @@
-# Zirnis on Kubernetes: the API (autoscaled), the web front (console and payer edge), Redis, and PgBouncer in front of
+# Zirnis on Kubernetes: the API (autoscaled), the web front (console and payer edge), Redis, RabbitMQ, and PgBouncer in front of
 # a PostgreSQL you run elsewhere (managed). See README.md.
 #
 #   kubectl kustomize deploy/kubernetes          # preview
@@ -12,6 +12,7 @@ resources:
   - web.yaml
   - pgbouncer.yaml
   - redis.yaml
+  - rabbitmq.yaml
 images:
   # Push the images built by docker compose and point these at them.
   - name: zirnis-api

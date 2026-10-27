@@ -16,4 +16,4 @@ Merchants need `payment.succeeded`, `payout.paid` and similar events. Publishing
 ## Consequences
 
 - No distributed transactions, and no event is ever published for a rolled-back change.
-- A single dispatcher instance is assumed. Scaling out would add row claiming (`SELECT … FOR UPDATE SKIP LOCKED` on Postgres) or move to a broker.
+- Several instances claim the events they deliver ([ADR 0030](0030-several-instances.md)). With RabbitMQ, a relay publishes the outbox's events and consumers deliver them; the outbox stays the source of truth ([ADR 0031](0031-rabbitmq-event-delivery.md)).

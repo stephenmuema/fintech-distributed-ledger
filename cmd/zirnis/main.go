@@ -72,7 +72,7 @@ func run(logger *slog.Logger) error {
 			return err
 		}
 		waitWorkers = workers.Start(ctx, sys.App, sys.Store, workers.Options{OutboxInterval: cfg.OutboxInterval, OperationsInterval: cfg.OperationsInterval,
-			AutoCobAt: cfg.AutoCobAt, Location: location, StaleAfter: cfg.StaleAfter}, logger)
+			AutoCobAt: cfg.AutoCobAt, Location: location, StaleAfter: cfg.StaleAfter, RabbitMQURL: cfg.RabbitMQURL}, logger)
 	}
 
 	servers := []*http.Server{newServer(cfg.Addr, sys.Handler())}

@@ -77,6 +77,7 @@ A KES 1,000.00 card payment with the 2.90% card collection charge passes through
 | `internal/store` | One portable SQL on five engines: migrations, the units of work, named locks, leases, partitions |
 | `internal/httpapi` | The HTTP API: authentication, idempotency, rate limits, OpenAPI. Its tests boot the real system |
 | `internal/workers` | Background work: webhook delivery, sweeps, scheduled COB |
+| `internal/broker` | RabbitMQ: publishing outbox events and consuming them for webhook delivery |
 | `internal/providers` | The provider gateway (retry, circuit breaker, timeout) and the sandbox simulators |
 | `pkg/provapi`, `modules/` | The provider-module contract and the modules (M-Pesa, KCB, Equity, Verto) |
 | `pkg/extapi`, `sdk/`, `examples/extensions` | Extensions: the bank's own rules, in Go or Python, which never post |
@@ -103,7 +104,8 @@ A KES 1,000.00 card payment with the 2.90% card collection charge passes through
   - webhooks are claimed;
   - authorised changes reach every instance;
   - rate limits are shared through Redis, which is optional.
-- **Kubernetes:** [deploy/kubernetes](deploy/kubernetes/README.md) runs the API at 3 to 10 replicas behind an autoscaler, with PgBouncer, Redis, draining shutdowns and migrations in an init container.
+- **Events through RabbitMQ (optional).** Outbox events are published to a topic exchange; consumers on every instance deliver the webhooks, and other services can bind their own queues. The outbox stays the source of truth, so nothing is lost if RabbitMQ is ([ADR 0031](docs/adr/0031-rabbitmq-event-delivery.md)).
+- **Kubernetes:** [deploy/kubernetes](deploy/kubernetes/README.md) runs the API at 3 to 10 replicas behind an autoscaler, with PgBouncer, Redis, RabbitMQ, draining shutdowns and migrations in an init container.
 - **Monthly partitions** for the journal and the audit trail on PostgreSQL, switched on with `zirnis partition` ([ADR 0029](docs/adr/0029-monthly-partitions.md)).
 
 [docs/runbooks/load-testing.md](docs/runbooks/load-testing.md) has the load test: a throughput ceiling, and a failure run that takes providers down while checking that the books stay whole.
@@ -121,7 +123,7 @@ ZIRNIS_TEST_DATABASE_URL='postgres://zirnis:…@localhost:5433/postgres?sslmode=
 
 - **What the tests do.** The integration tests in `internal/httpapi` boot the whole system against a fresh database with a controllable clock. The money-moving ones also check that the trial balance holds, that no balance has drifted from its postings, and that the audit chain verifies.
 - **On a server engine** they also exercise parallel writers and several instances on one database.
-- **Redis.** `ZIRNIS_TEST_REDIS_URL` adds the shared rate-limit test.
+- **Redis and RabbitMQ.** `ZIRNIS_TEST_REDIS_URL` adds the shared rate-limit test; `ZIRNIS_TEST_RABBITMQ_URL` adds the event delivery tests.
 - **In CI:** SQLite on every push; MySQL, SQL Server and Oracle in [databases.yml](.github/workflows/databases.yml); security scans in [security.yml](.github/workflows/security.yml).
 
 ## Documentation
@@ -136,4 +138,4 @@ ZIRNIS_TEST_DATABASE_URL='postgres://zirnis:…@localhost:5433/postgres?sslmode=
 | **Core banking** | [0005](docs/adr/0005-t24-style-core-banking.md) T24-style dates, COB and maker-checker · [0006](docs/adr/0006-modular-monolith.md) modular monolith · [0010](docs/adr/0010-straight-through-processing.md) straight-through processing · [0020](docs/adr/0020-local-tables-physical-columns.md) local tables · [0021](docs/adr/0021-enquiries.md) enquiries · [0024](docs/adr/0024-change-log-and-customer-changes.md) change log |
 | **Providers** | [0003](docs/adr/0003-provider-orchestration-and-resilience.md) orchestration and resilience · [0014](docs/adr/0014-provider-channels.md) provider channels · [0015](docs/adr/0015-built-in-providers-are-channels.md) built-in providers · [0018](docs/adr/0018-providers-are-modules.md) providers are modules · [0022](docs/adr/0022-payer-edge.md) payer edge |
 | **Customers and controls** | [0008](docs/adr/0008-validation-and-audit-trail.md) validation and audit · [0011](docs/adr/0011-extension-framework.md) extensions · [0016](docs/adr/0016-operator-sign-in-and-permissions.md) operators and permissions · [0017](docs/adr/0017-production-safety.md) production safety · [0023](docs/adr/0023-customer-onboarding.md) onboarding · [0026](docs/adr/0026-business-intelligence-and-the-analyst-permission.md) business intelligence |
-| **Storage and scale** | [0007](docs/adr/0007-go-and-single-writer-sqlite.md) Go and SQLite · [0009](docs/adr/0009-portable-sql-and-evidence-copy.md) five engines and the evidence copy · [0027](docs/adr/0027-parallel-writers.md) parallel writers · [0028](docs/adr/0028-split-accounts.md) split accounts · [0029](docs/adr/0029-monthly-partitions.md) monthly partitions · [0030](docs/adr/0030-several-instances.md) several instances |
+| **Storage and scale** | [0007](docs/adr/0007-go-and-single-writer-sqlite.md) Go and SQLite · [0009](docs/adr/0009-portable-sql-and-evidence-copy.md) five engines and the evidence copy · [0027](docs/adr/0027-parallel-writers.md) parallel writers · [0028](docs/adr/0028-split-accounts.md) split accounts · [0029](docs/adr/0029-monthly-partitions.md) monthly partitions · [0030](docs/adr/0030-several-instances.md) several instances · [0031](docs/adr/0031-rabbitmq-event-delivery.md) RabbitMQ |

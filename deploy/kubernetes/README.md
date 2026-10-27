@@ -1,6 +1,6 @@
 # Zirnis on Kubernetes
 
-These manifests run the API (three replicas or more, autoscaled), the web front (console and payer edge), Redis and PgBouncer. PostgreSQL itself runs elsewhere, ideally managed. Render them with `kubectl kustomize deploy/kubernetes`; apply them with `kubectl apply -k deploy/kubernetes`.
+These manifests run the API (three replicas or more, autoscaled), the web front (console and payer edge), Redis, RabbitMQ and PgBouncer. PostgreSQL itself runs elsewhere, ideally managed. Render them with `kubectl kustomize deploy/kubernetes`; apply them with `kubectl apply -k deploy/kubernetes`.
 
 ## Before applying
 
@@ -15,10 +15,12 @@ These manifests run the API (three replicas or more, autoscaled), the web front 
      --from-literal=ZIRNIS_DATABASE_URL='postgres://zirnis:...@pgbouncer:5432/zirnis?sslmode=disable' \
      --from-literal=ZIRNIS_BOOTSTRAP_ADMIN=... \
      --from-literal=ZIRNIS_PUBLIC_URL=https://pay.example.com \
-     --from-literal=ZIRNIS_MODULE_MPESA_SECRET=...
+     --from-literal=ZIRNIS_MODULE_MPESA_SECRET=... \
+     --from-literal=RABBITMQ_PASSWORD=... \
+     --from-literal=ZIRNIS_RABBITMQ_URL='amqp://zirnis:...@rabbitmq:5672/'
    ```
 
-   PgBouncer reads the password; the API reads the URL. Percent-encode the password inside the URL if it has characters other than letters, digits, `-` and `_`.
+   PgBouncer reads the database password and RabbitMQ its own; the API reads the URLs. Percent-encode the password inside the URL if it has characters other than letters, digits, `-` and `_`.
 4. **Set `ZIRNIS_CORS_ORIGINS`** in the `zirnis-api` ConfigMap (`api.yaml`) to the console's address.
 5. **Expose the services.** Publish only `web` port 8081, the payer edge, to the internet, behind TLS. Keep `web` port 8080, the console, on the internal network.
 
@@ -27,7 +29,7 @@ These manifests run the API (three replicas or more, autoscaled), the web front 
 **The API runs three replicas or more** ([ADR 0030](../../docs/adr/0030-several-instances.md)). The instances coordinate through the database:
 - **Close of business** runs on one instance (a lease). After switching the business date, it waits until every live instance has finished the work that could still book to the closing day.
 - **Background jobs** run on the instance that holds each job's lease. Another instance takes a job over within three cycles if its holder dies.
-- **Webhooks** are claimed by one dispatcher each.
+- **Webhooks** go through RabbitMQ: a relay on each instance publishes the outbox's events, and consumers on every instance deliver them ([ADR 0031](../../docs/adr/0031-rabbitmq-event-delivery.md)). Without `ZIRNIS_RABBITMQ_URL`, each event is claimed by one instance's dispatcher instead.
 - **Authorised changes** (a provider channel, a module, rates) reach every instance within 3 seconds.
 - **Rate limits** are shared through Redis. If Redis is down, each instance counts its own requests until it's back.
 
@@ -54,6 +56,8 @@ These manifests run the API (three replicas or more, autoscaled), the web front 
 `terminationGracePeriodSeconds: 45` covers all four. A card payment already sent to an acquirer finishes even if its client has gone. If the process is killed anyway, recovery settles the payment ([ADR 0003](../../docs/adr/0003-provider-orchestration-and-resilience.md)).
 
 **Web and PgBouncer are stateless:** two replicas each, spread across nodes. A `PodDisruptionBudget` lets node drains take only one pod of each at a time. Redis runs one replica: losing it costs only the shared rate-limit counts.
+
+**RabbitMQ runs one node** (a StatefulSet with a 5 GiB volume), so queued messages survive a restart. Losing it delays webhooks, never loses them: events wait in the outbox and are published again. For high availability, run three nodes with the RabbitMQ Cluster Operator and point `ZIRNIS_RABBITMQ_URL` at it. Other services can bind their own queues to the exchange `zirnis.events`.
 
 **Settlement reports and nostro statements are uploaded through the API.** Nothing is kept on the pod. To use the inbox directories instead (`ZIRNIS_SETTLEMENT_INBOX`, `ZIRNIS_STATEMENT_INBOX`), mount a `ReadWriteMany` volume at `/data`. A `ReadWriteOnce` volume can block the surge pod during a rollout.
 
