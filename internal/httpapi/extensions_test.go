@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -122,15 +123,15 @@ func (v limitValidator) RunCob(_ context.Context, req extapi.CobJobRequest) (ext
 }
 
 func TestRemoteExtensionVetoesClearingsAndFailsClosed(t *testing.T) {
-	t.Setenv("ZIRNIS_TEST_HOOK_SECRET", "s3cret-shared-with-the-extension")
+	env := secretEnv(t, "ZIRNIS_TEST_HOOK_SECRET", "s3cret-shared-with-the-extension")
 	remote := httptest.NewServer(extapi.Handler(limitValidator{limit: 5_000}, "s3cret-shared-with-the-extension"))
 	defer remote.Close()
 	h := newHarness(t)
 
 	eq(t, "invalid_hook_endpoint", h.amina().post("/ops/parameters/hooks/limit-check", map[string]any{"url": remote.URL,
-		"hooks": []string{"suspense.nonsense"}, "secretEnv": "ZIRNIS_TEST_HOOK_SECRET"}).expect(422).str("code"))
+		"hooks": []string{"suspense.nonsense"}, "secretEnv": env}).expect(422).str("code"))
 	h.amina().post("/ops/parameters/hooks/limit-check", map[string]any{"url": remote.URL, "hooks": []string{"suspense.validate_clearing", "cob.job"},
-		"secretEnv": "ZIRNIS_TEST_HOOK_SECRET", "failurePolicy": "FailClosed", "timeoutMs": 2000}).expect(202)
+		"secretEnv": env, "failurePolicy": "FailClosed", "timeoutMs": 2000}).expect(202)
 	authorisePending(h, "limit-check")
 
 	suspenseType(h, "DESK", map[string]any{"name": "Desk suspense", "side": "Debit", "currencies": []string{"KES"},
@@ -159,7 +160,9 @@ func TestRemoteExtensionVetoesClearingsAndFailsClosed(t *testing.T) {
 	check(t, found, "EXT.LIMIT.CHECK ran")
 
 	// A wrong secret is refused by the extension; FailClosed then blocks the input.
-	t.Setenv("ZIRNIS_TEST_HOOK_SECRET", "not-the-secret")
+	if err := os.Setenv(env, "not-the-secret"); err != nil {
+		t.Fatal(err)
+	}
 	other := raiseItem(h, "DESK", 1_000, bank, nil)
 	eq(t, "extension_unavailable", h.amina().postIdempotent("/ops/suspense/items/"+other.str("id")+"/clearings", map[string]any{
 		"targetAccountNumber": bank, "amount": 1_000, "narrative": "Traced"}).expect(422).str("code"))

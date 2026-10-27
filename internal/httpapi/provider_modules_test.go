@@ -166,8 +166,7 @@ func (c withAction) RunAction(_ context.Context, name string, _ json.RawMessage)
 func serveModule(h *harness, name string, m provapi.Module, timeoutMs int) *httptest.Server {
 	h.t.Helper()
 	secret := "module-secret-" + name + "-0123456789abcdef0123"
-	env := "ZIRNIS_TEST_MODULE_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
-	h.t.Setenv(env, secret)
+	env := secretEnv(h.t, "ZIRNIS_TEST_MODULE_"+strings.ToUpper(strings.ReplaceAll(name, "-", "_")), secret)
 	srv := httptest.NewServer(provapi.Handler(m, secret))
 	h.t.Cleanup(srv.Close)
 	inputAndAuthoriseChange(h, "/ops/parameters/hooks/"+name, map[string]any{"url": srv.URL, "hooks": []string{"provider"},

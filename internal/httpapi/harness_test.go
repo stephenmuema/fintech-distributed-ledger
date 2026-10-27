@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,8 @@ import (
 
 	"github.com/stephenmuema/finnie/internal/clock"
 	"github.com/stephenmuema/finnie/internal/config"
+	"github.com/stephenmuema/finnie/internal/domain"
+	"github.com/stephenmuema/finnie/internal/store"
 	"github.com/stephenmuema/finnie/internal/store/storetest"
 	"github.com/stephenmuema/finnie/internal/system"
 	"github.com/stephenmuema/finnie/internal/webhook"
@@ -33,8 +36,9 @@ const (
 // start is Wednesday 28 Oct 2026, 08:00 UTC — two working days before a month end.
 var start = time.Date(2026, 10, 28, 8, 0, 0, 0, time.UTC)
 
-// harness boots the real API in-process against a throwaway SQLite file, with background
-// workers off and a controllable clock. Every test gets its own database.
+// harness boots the real API in-process against a throwaway database, with background workers
+// off and a controllable clock. Every test gets its own database, copied from one migrated and
+// bootstrapped once per configuration (storetest.Clone), and tests run in parallel.
 type harness struct {
 	t     *testing.T
 	sys   *system.System
@@ -49,20 +53,40 @@ type option any
 
 func newHarness(t *testing.T, options ...option) *harness {
 	t.Helper()
+	parallel(t)
 	cfg := config.Default()
 	cfg.Environment = "Testing"
-	cfg.Database = filepath.Join(t.TempDir(), "zirnis-test.db")
 	// ZIRNIS_TEST_DATASOURCE runs the whole suite on PostgreSQL, MySQL or SQL Server instead.
-	dialect, databaseURL := storetest.FreshDatabase(t)
-	cfg.Datasource, cfg.DatabaseURL = string(dialect), databaseURL
+	cfg.Datasource = string(storetest.Datasource())
 	cfg.Sandbox = boolPtr(true)
 	cfg.ProviderRetryDelay = time.Millisecond
 	cfg.ProviderTimeout = 2 * time.Second
 	cfg.RateLimitPerMinute = 100_000
+	// Small pools: tests run in parallel against one database server.
+	cfg.DBMaxReadConns, cfg.DBMaxWriteConns = 4, 8
 	for _, o := range options {
 		if configure, ok := o.(func(*config.Config)); ok {
 			configure(&cfg)
 		}
+	}
+	switch {
+	case cfg.DatabaseURL != "": // another instance on a harness's database (anotherInstance)
+	case cfg.MongoURI != "": // the evidence copy must see the bootstrap happen
+		var dialect store.Dialect
+		dialect, cfg.DatabaseURL = storetest.FreshDatabase(t)
+		cfg.Datasource, cfg.Database = string(dialect), filepath.Join(t.TempDir(), "zirnis-test.db")
+	default:
+		var dialect store.Dialect
+		dialect, cfg.DatabaseURL, cfg.Database = storetest.Clone(t, templateKey(cfg), func(d store.Dialect, url, path string) error {
+			c := cfg
+			c.Datasource, c.DatabaseURL, c.Database = string(d), url, path
+			sys, err := system.Build(context.Background(), c, clock.NewFake(start), slog.New(slog.DiscardHandler))
+			if err != nil {
+				return err
+			}
+			return sys.Close()
+		})
+		cfg.Datasource = string(dialect)
 	}
 
 	clk := clock.NewFake(start)
@@ -85,6 +109,44 @@ func newHarness(t *testing.T, options ...option) *harness {
 		_ = sys.Close()
 	})
 	return &harness{t: t, sys: sys, clock: clk, srv: srv}
+}
+
+// templateKey tells configurations apart that may bootstrap differently, so each gets its own
+// template database.
+func templateKey(cfg config.Config) string {
+	sandbox := cfg.Sandbox != nil && *cfg.Sandbox
+	cfg.Sandbox, cfg.Database, cfg.DatabaseURL = nil, "", ""
+	return fmt.Sprintf("%+v sandbox=%v", cfg, sandbox)
+}
+
+// parallel runs the test alongside the others: each has its own database, clock and server. A
+// test makes its harnesses (sometimes two, for two instances) before it does anything else.
+func parallel(t *testing.T) {
+	if strings.Contains(t.Name(), "/") {
+		return // subtests run as their parent decides
+	}
+	if _, again := parallelTests.LoadOrStore(t, true); !again {
+		t.Parallel()
+	}
+}
+
+var parallelTests sync.Map
+
+// secretEnv puts a secret where Zirnis reads it from, the environment, under a name of the
+// test's own: tests run in parallel and share the process's environment.
+func secretEnv(t *testing.T, prefix, value string) string {
+	name := prefix + "_" + strings.ToUpper(domain.RandomHex(4))
+	if err := os.Setenv(name, value); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Unsetenv(name) })
+	return name
+}
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	storetest.DropTemplates()
+	os.Exit(code)
 }
 
 func boolPtr(b bool) *bool { return &b }

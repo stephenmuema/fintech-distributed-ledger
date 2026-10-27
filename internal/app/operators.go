@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"time"
 
@@ -328,6 +329,7 @@ func (o *Operators) ensureOperators(tx *store.Tx) error {
 				continue
 			}
 			spec := d.spec
+			spec.Permissions = slices.Clone(spec.Permissions) // Normalize rewrites them in place; the demo list is shared
 			if err := spec.Normalize(); err != nil {
 				return err
 			}
