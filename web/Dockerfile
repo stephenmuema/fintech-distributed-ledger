@@ -10,7 +10,7 @@ RUN npm run build
 # Runs as a non-root user and listens on 8080. Alpine packages are upgraded at build time so a
 # base image that lags its distro (e.g. OpenSSL CVE-2026-31789) still ships the patched libraries.
 # nginx itself comes from nginx.org's repository and only changes with the tag: track the stable line.
-FROM nginxinc/nginx-unprivileged:1.30-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 USER root
 RUN apk upgrade --no-cache
 USER 101
