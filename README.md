@@ -123,6 +123,7 @@ ZIRNIS_TEST_DATABASE_URL='postgres://zirnis:…@localhost:5433/postgres?sslmode=
 
 - **What the tests do.** The integration tests in `internal/httpapi` boot the whole system against a fresh database with a controllable clock. The money-moving ones also check that the trial balance holds, that no balance has drifted from its postings, and that the audit chain verifies.
 - **On a server engine** they also exercise parallel writers and several instances on one database.
+- **They run in parallel, each on its own copy of a database** migrated and bootstrapped once per configuration (a file copy on SQLite, `CREATE DATABASE … TEMPLATE` on PostgreSQL). The suite takes about 25 seconds on SQLite and 2 minutes on PostgreSQL. MySQL, SQL Server and Oracle build each test's database from scratch, so they're slower.
 - **Redis and RabbitMQ.** `ZIRNIS_TEST_REDIS_URL` adds the shared rate-limit test; `ZIRNIS_TEST_RABBITMQ_URL` adds the event delivery tests.
 - **In CI:** SQLite on every push; MySQL, SQL Server and Oracle in [databases.yml](.github/workflows/databases.yml); security scans in [security.yml](.github/workflows/security.yml).
 
