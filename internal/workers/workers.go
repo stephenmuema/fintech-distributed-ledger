@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/stephenmuema/finnie/internal/app"
+	"github.com/stephenmuema/finnie/internal/broker"
 	"github.com/stephenmuema/finnie/internal/domain"
 	"github.com/stephenmuema/finnie/internal/store"
 	"github.com/stephenmuema/finnie/internal/webhook"
@@ -28,13 +29,20 @@ type Options struct {
 	Location  *time.Location
 	// StaleAfter: collections without a callback this long are confirmed by status query.
 	StaleAfter time.Duration
+	// RabbitMQURL (optional) carries outbox events through RabbitMQ (ADR 0031); without it each
+	// instance delivers webhooks straight from the outbox.
+	RabbitMQURL string
 }
+
+// consumers is how many webhook deliveries an instance makes at once from RabbitMQ.
+const consumers = 8
 
 // Start runs the workers until ctx ends. wait returns once each has finished the cycle it was in,
 // so the process can close the database after them.
 //
 // With several instances (ADR 0030), outbox delivery runs on each (a dispatcher claims what it
-// delivers) and so does reloading changed parameters; every other job runs on the instance
+// delivers; with RabbitMQ, a relay publishes and consumers deliver, ADR 0031) and so does
+// reloading changed parameters; every other job runs on the instance
 // holding its lease, one at a time.
 func Start(ctx context.Context, a *app.App, st *store.Store, o Options, logger *slog.Logger) (wait func()) {
 	var wg sync.WaitGroup
@@ -47,11 +55,31 @@ func Start(ctx context.Context, a *app.App, st *store.Store, o Options, logger *
 		})
 	}
 	dispatcher := &OutboxDispatcher{App: a, Store: st, Client: &http.Client{Timeout: 10 * time.Second}, Logger: logger}
-	run(o.OutboxInterval, func() {
-		if _, err := dispatcher.Drain(ctx); err != nil {
-			logger.Error("outbox dispatch failed", "error", err)
-		}
-	})
+	closeBroker := func() {}
+	if o.RabbitMQURL != "" {
+		b := broker.New(broker.Options{URL: o.RabbitMQURL}, logger)
+		closeBroker = func() { _ = b.Close() }
+		relay := &Relay{App: a, Store: st, Broker: b}
+		failing := false // log an outage once, not every cycle
+		run(o.OutboxInterval, func() {
+			_, err := relay.Drain(ctx)
+			switch {
+			case err != nil && !failing && ctx.Err() == nil:
+				logger.Error("publishing events to RabbitMQ failed; they wait in the outbox", "error", err)
+				failing = true
+			case err == nil && failing:
+				logger.Info("publishing events to RabbitMQ again")
+				failing = false
+			}
+		})
+		wg.Go(func() { b.Consume(ctx, consumers, dispatcher.Take) })
+	} else {
+		run(o.OutboxInterval, func() {
+			if _, err := dispatcher.Drain(ctx); err != nil {
+				logger.Error("outbox dispatch failed", "error", err)
+			}
+		})
+	}
 	run(3*time.Second, func() {
 		if err := a.ReloadIfChanged(ctx); err != nil {
 			logger.Error("reloading authorised parameters failed", "error", err)
@@ -73,7 +101,10 @@ func Start(ctx context.Context, a *app.App, st *store.Store, o Options, logger *
 			logger.Error("partition upkeep failed", "error", err)
 		}
 	})
-	return wg.Wait
+	return func() {
+		wg.Wait()
+		closeBroker()
+	}
 }
 
 // Instance keeps this instance registered among those sharing the database, and acknowledges
@@ -140,41 +171,13 @@ func (d *OutboxDispatcher) Drain(ctx context.Context) (int, error) {
 const outboxClaim = 2 * time.Minute
 
 func (d *OutboxDispatcher) dispatchBatch(ctx context.Context) (int, error) {
-	now := d.App.Clock.Now()
-	due, err := store.Select[domain.OutboxMessage](d.Store.Read(ctx),
-		"SELECT * FROM outbox_messages WHERE status = ? AND next_attempt_at <= ? AND (claimed_until IS NULL OR claimed_until < ?) ORDER BY occurred_at LIMIT ?",
-		domain.OutboxPending, now, now, outboxBatch)
-	if err != nil || len(due) == 0 {
-		return 0, err
+	due, batch, err := claimDue(ctx, d.App, d.Store, "d:"+domain.RandomHex(8), outboxClaim)
+	if err != nil || len(batch) == 0 {
+		return due, err
 	}
-	// Claim them, so with several instances each event goes to one dispatcher; deliver only what
-	// this batch claimed.
-	token := domain.NewID().String()
-	ids := make([]uuid.UUID, len(due))
-	for i, m := range due {
-		ids[i] = m.ID
-	}
-	err = d.Store.Atomic(ctx, func(tx *store.Tx) error {
-		marks, args := store.In(ids)
-		_, err := tx.Exec("UPDATE outbox_messages SET claimed_by = ?, claimed_until = ? WHERE id IN ("+marks+") AND status = ? AND (claimed_until IS NULL OR claimed_until < ?)",
-			append(append([]any{token, now.Add(outboxClaim)}, args...), domain.OutboxPending, now)...)
-		return err
-	})
+	endpoints, err := d.endpoints(ctx, batch)
 	if err != nil {
 		return 0, err
-	}
-	q := d.Store.Read(ctx)
-	batch, err := store.Select[domain.OutboxMessage](q, "SELECT * FROM outbox_messages WHERE claimed_by = ? ORDER BY occurred_at", token)
-	if err != nil || len(batch) == 0 {
-		return len(due), err
-	}
-	endpoints := map[uuid.UUID]*domain.WebhookEndpoint{}
-	for _, m := range batch {
-		if _, seen := endpoints[m.CustomerID]; !seen {
-			if endpoints[m.CustomerID], err = store.Get[domain.WebhookEndpoint](q, "SELECT * FROM webhook_endpoints WHERE customer_id = ?", m.CustomerID); err != nil {
-				return 0, err
-			}
-		}
 	}
 
 	// Deliver outside any transaction, then record every outcome in one commit. Delivery stops
@@ -185,22 +188,74 @@ func (d *OutboxDispatcher) dispatchBatch(ctx context.Context) (int, error) {
 			batch = batch[:i]
 			break
 		}
-		m := &batch[i]
-		endpoint := endpoints[m.CustomerID]
-		if endpoint == nil {
-			m.MarkSkipped()
-			continue
-		}
-		if err := d.deliver(ctx, endpoint, m); err != nil {
-			m.MarkFailed(err.Error(), d.App.Clock.Now())
-		} else {
-			m.MarkDelivered(d.App.Clock.Now())
-		}
-		if m.Status == domain.OutboxDeadLettered {
-			d.Logger.Error("webhook dead-lettered", "event", m.ID, "type", m.Type, "attempts", m.Attempts)
+		d.attempt(ctx, endpoints[batch[i].CustomerID], &batch[i])
+	}
+	return due, d.record(ctx, batch)
+}
+
+// claimDue claims up to a batch of the events due for delivery, so with several instances each
+// event goes to one of them, and returns how many were due and the ones this claim took.
+func claimDue(ctx context.Context, a *app.App, st *store.Store, token string, hold time.Duration) (int, []domain.OutboxMessage, error) {
+	now := a.Clock.Now()
+	due, err := store.Select[domain.OutboxMessage](st.Read(ctx),
+		"SELECT * FROM outbox_messages WHERE status = ? AND next_attempt_at <= ? AND (claimed_until IS NULL OR claimed_until < ?) ORDER BY occurred_at LIMIT ?",
+		domain.OutboxPending, now, now, outboxBatch)
+	if err != nil || len(due) == 0 {
+		return 0, nil, err
+	}
+	ids := make([]uuid.UUID, len(due))
+	for i, m := range due {
+		ids[i] = m.ID
+	}
+	err = st.Atomic(ctx, func(tx *store.Tx) error {
+		marks, args := store.In(ids)
+		_, err := tx.Exec("UPDATE outbox_messages SET claimed_by = ?, claimed_until = ? WHERE id IN ("+marks+") AND status = ? AND (claimed_until IS NULL OR claimed_until < ?)",
+			append(append([]any{token, now.Add(hold)}, args...), domain.OutboxPending, now)...)
+		return err
+	})
+	if err != nil {
+		return 0, nil, err
+	}
+	batch, err := store.Select[domain.OutboxMessage](st.Read(ctx), "SELECT * FROM outbox_messages WHERE claimed_by = ? ORDER BY occurred_at", token)
+	return len(due), batch, err
+}
+
+// endpoints looks up the webhook endpoint of each customer in the batch (nil: none registered).
+func (d *OutboxDispatcher) endpoints(ctx context.Context, batch []domain.OutboxMessage) (map[uuid.UUID]*domain.WebhookEndpoint, error) {
+	q := d.Store.Read(ctx)
+	endpoints := map[uuid.UUID]*domain.WebhookEndpoint{}
+	for _, m := range batch {
+		if _, seen := endpoints[m.CustomerID]; !seen {
+			endpoint, err := store.Get[domain.WebhookEndpoint](q, "SELECT * FROM webhook_endpoints WHERE customer_id = ?", m.CustomerID)
+			if err != nil {
+				return nil, err
+			}
+			endpoints[m.CustomerID] = endpoint
 		}
 	}
-	return len(due), d.Store.Atomic(ctx, func(tx *store.Tx) error {
+	return endpoints, nil
+}
+
+// attempt delivers one event and marks the outcome on it: delivered, failed (retried later with
+// backoff, dead-lettered in the end) or skipped when the customer has no endpoint.
+func (d *OutboxDispatcher) attempt(ctx context.Context, endpoint *domain.WebhookEndpoint, m *domain.OutboxMessage) {
+	if endpoint == nil {
+		m.MarkSkipped()
+		return
+	}
+	if err := d.deliver(ctx, endpoint, m); err != nil {
+		m.MarkFailed(err.Error(), d.App.Clock.Now())
+	} else {
+		m.MarkDelivered(d.App.Clock.Now())
+	}
+	if m.Status == domain.OutboxDeadLettered {
+		d.Logger.Error("webhook dead-lettered", "event", m.ID, "type", m.Type, "attempts", m.Attempts)
+	}
+}
+
+// record saves the outcomes and releases the claims, in one commit.
+func (d *OutboxDispatcher) record(ctx context.Context, batch []domain.OutboxMessage) error {
+	return d.Store.Atomic(ctx, func(tx *store.Tx) error {
 		for i := range batch {
 			if _, err := tx.Exec("UPDATE outbox_messages SET status = ?, attempts = ?, next_attempt_at = ?, delivered_at = ?, last_error = ?, claimed_by = NULL, claimed_until = NULL WHERE id = ?",
 				batch[i].Status, batch[i].Attempts, batch[i].NextAttemptAt, batch[i].DeliveredAt, batch[i].LastError, batch[i].ID); err != nil {

@@ -58,6 +58,9 @@ type Config struct {
 	// RedisURL (optional) shares rate limits between instances, e.g. redis://redis:6379/0. Without
 	// it, or while it doesn't answer, each instance counts on its own.
 	RedisURL string `json:"-"`
+	// RabbitMQURL (optional) carries outbox events through RabbitMQ (ADR 0031), e.g.
+	// amqp://zirnis:…@rabbitmq:5672/. Without it each instance delivers webhooks from the outbox.
+	RabbitMQURL string `json:"-"`
 	// LedgerParts is how many parts a busy shared account is split into on the server engines
 	// (ADR 0028). 1 keeps every account whole.
 	LedgerParts int `json:"ledgerParts"`
@@ -280,6 +283,7 @@ func Load() (Config, error) {
 	integer("ZIRNIS_AUDIT_CHAINS", &c.AuditChains)
 	integer("ZIRNIS_LEDGER_PARTS", &c.LedgerParts)
 	str("ZIRNIS_REDIS_URL", &c.RedisURL)
+	str("ZIRNIS_RABBITMQ_URL", &c.RabbitMQURL)
 	str("ZIRNIS_MONGODB_URI", &c.MongoURI)
 	str("ZIRNIS_MONGODB_DATABASE", &c.MongoDatabase)
 	str("ZIRNIS_LOCAL_CURRENCY", &c.LocalCurrency)

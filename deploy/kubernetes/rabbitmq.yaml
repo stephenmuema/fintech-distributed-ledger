@@ -1,0 +1,63 @@
+# RabbitMQ carries outbox events from the API to webhook delivery and to any other subscriber
+# (ADR 0031). One node with a persistent volume, so queued messages survive a restart. The outbox
+# stays the source of truth: if RabbitMQ is down or loses messages, events wait there and are
+# published again. For a highly available broker, run three nodes with the RabbitMQ Cluster
+# Operator instead (the webhook queue is a quorum queue) and point ZIRNIS_RABBITMQ_URL at it.
+#
+# The password comes from Secret "zirnis" (RABBITMQ_PASSWORD); the API's ZIRNIS_RABBITMQ_URL in
+# the same secret must carry it.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  labels: { app: rabbitmq }
+spec:
+  serviceName: rabbitmq
+  replicas: 1
+  selector:
+    matchLabels: { app: rabbitmq }
+  template:
+    metadata:
+      labels: { app: rabbitmq }
+    spec:
+      terminationGracePeriodSeconds: 60 # flushes queues to disk on the way out
+      securityContext: { runAsNonRoot: true, runAsUser: 100, runAsGroup: 101, fsGroup: 101, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:4.4.0-alpine
+          env:
+            - { name: RABBITMQ_DEFAULT_USER, value: zirnis }
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom: { secretKeyRef: { name: zirnis, key: RABBITMQ_PASSWORD } }
+            - { name: RABBITMQ_NODENAME, value: rabbit@localhost } # a stable name, so the data volume is found again
+          ports:
+            - { name: amqp, containerPort: 5672 }
+          readinessProbe:
+            exec: { command: ["rabbitmq-diagnostics", "-q", "check_port_connectivity"] }
+            periodSeconds: 10
+            timeoutSeconds: 10
+          livenessProbe:
+            exec: { command: ["rabbitmq-diagnostics", "-q", "status"] }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 15
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/rabbitmq }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources: { requests: { storage: 5Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+spec:
+  selector: { app: rabbitmq }
+  ports:
+    - { name: amqp, port: 5672, targetPort: amqp }
