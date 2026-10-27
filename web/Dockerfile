@@ -1,6 +1,6 @@
 # The Zirnis console (8080, the internal network) and the payer edge (8081, the internet: hosted checkout
 # and provider callbacks), served by unprivileged nginx, which proxies to the API container.
-FROM node:24-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /web
 COPY package.json package-lock.json ./
 RUN npm ci
