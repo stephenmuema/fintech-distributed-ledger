@@ -1,0 +1,16 @@
+# Redis for rate limits shared between API instances (ADR 0030). Optional: without it each
+# instance counts its own requests. A cache only, so nothing is persisted.
+#
+#   docker compose -f docker-compose.yml -f deploy/compose/redis.yml up -d --build
+services:
+  redis:
+    image: redis:7.4.2-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    restart: unless-stopped
+
+  api:
+    environment:
+      ZIRNIS_REDIS_URL: ${ZIRNIS_REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      redis:
+        condition: service_started

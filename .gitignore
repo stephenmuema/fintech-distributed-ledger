@@ -1,0 +1,34 @@
+# Go build output
+/zirnis
+*.exe
+coverage.out
+
+# Local databases (SQLite + WAL files)
+*.db
+*.db-shm
+*.db-wal
+
+# Frontend
+node_modules/
+web/dist/
+*.local
+
+# Editors / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Job advert this project responds to — keep it out of the public repo
+9ab75956-ad25-4a32-8967-f462f74d04df.jpg
+
+# Local Claude Code settings and state
+.claude/
+
+# Local configuration (copy .env.example); never commit secrets
+.env
+deploy/modules/*.env
+
+# Load-test populations (cmd/loadtest seed): test data, never committed
+.loadtest/

@@ -1,0 +1,121 @@
+# The API: three replicas or more, autoscaled (ADR 0030). Instances coordinate through the
+# database: close of business waits for every live instance, singleton jobs run under leases,
+# webhooks are claimed, and authorised changes reach every instance within seconds.
+#
+# Settings both containers read. Secret "zirnis" holds the rest (README.md): ZIRNIS_DATABASE_URL,
+# ZIRNIS_DB_PASSWORD, the module secrets, ZIRNIS_BOOTSTRAP_ADMIN[_PASSWORD] and ZIRNIS_PUBLIC_URL.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: zirnis-api
+data:
+  ZIRNIS_ENV: Production
+  ZIRNIS_DATASOURCE: postgres
+  ZIRNIS_EDGE_ADDR: ":8081"
+  ZIRNIS_CORS_ORIGINS: https://console.example.internal
+  ZIRNIS_AUTO_COB_AT: "23:00"
+  ZIRNIS_SHUTDOWN_DRAIN: 5s # unready first, so traffic moves before it stops
+  ZIRNIS_SHUTDOWN_TIMEOUT: 20s
+  ZIRNIS_REDIS_URL: redis://redis:6379/0 # rate limits shared by every instance
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels: { app: zirnis-api }
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } # the new pod is ready before the old one stops
+  selector:
+    matchLabels: { app: zirnis-api }
+  template:
+    metadata:
+      labels: { app: zirnis-api }
+    spec:
+      # The drain (5s), then requests in flight (up to 20s), then the workers' current cycle.
+      terminationGracePeriodSeconds: 45
+      securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: RuntimeDefault } }
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: zirnis-api } } }
+      initContainers:
+        # Migrate and bootstrap before taking traffic. Pods starting together take turns (the
+        # setup lock), so the first migrates and the rest find the schema ready.
+        - name: migrate
+          image: zirnis-api
+          args: [migrate]
+          envFrom:
+            - configMapRef: { name: zirnis-api }
+            - secretRef: { name: zirnis }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+      containers:
+        - name: api
+          image: zirnis-api
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: edge, containerPort: 8081 }
+          envFrom:
+            - configMapRef: { name: zirnis-api }
+            - secretRef: { name: zirnis }
+          startupProbe: # the migrate container has run; this is start-up only
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe: # fails while the database is unreachable or the pod drains
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 5
+            failureThreshold: 1
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 500m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: data, mountPath: /data }
+      volumes:
+        # Settlement reports and nostro statements are uploaded through the API here; nothing is
+        # kept on the pod.
+        - { name: tmp, emptyDir: {} }
+        - { name: data, emptyDir: {} }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: api }
+  # Each instance opens up to 16 writers, 16 readers and 2 side connections to PgBouncer; the
+  # database, not the pods, is the ceiling. Raise maxReplicas only with PgBouncer's pools and
+  # PostgreSQL's capacity (README.md).
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 65 } }
+  behavior:
+    scaleUp: { stabilizationWindowSeconds: 0 }
+    scaleDown: { stabilizationWindowSeconds: 300 } # pods drain on the way out; no flapping
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api
+spec:
+  maxUnavailable: 1 # node drains take one API pod at a time
+  selector:
+    matchLabels: { app: zirnis-api }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api # the web front's nginx proxies to http://api:8080 and http://api:8081
+spec:
+  selector: { app: zirnis-api }
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+    - { name: edge, port: 8081, targetPort: edge }

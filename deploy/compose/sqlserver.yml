@@ -1,0 +1,45 @@
+# Microsoft SQL Server 2025 for Zirnis (linux/amd64 image; runs under emulation on Apple silicon).
+#   docker compose -f docker-compose.yml -f deploy/compose/sqlserver.yml up --build
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${ZIRNIS_DB_PASSWORD:-Zirnis-local-0nly}
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    restart: unless-stopped
+
+  # SQL Server doesn't create databases from environment variables: create Zirnis's once, with
+  # read-committed snapshot (non-blocking reads, which Zirnis requires).
+  sqlserver-init:
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      MSSQL_SA_PASSWORD: ${ZIRNIS_DB_PASSWORD:-Zirnis-local-0nly}
+    entrypoint:
+      - /bin/bash
+      - -c
+      - >-
+        /opt/mssql-tools18/bin/sqlcmd -C -S sqlserver -U sa -P "$$MSSQL_SA_PASSWORD" -b -Q
+        "IF DB_ID('zirnis') IS NULL BEGIN CREATE DATABASE zirnis; ALTER DATABASE zirnis SET READ_COMMITTED_SNAPSHOT ON; END"
+    restart: "no"
+
+  api:
+    environment:
+      ZIRNIS_DATASOURCE: sqlserver
+      ZIRNIS_DATABASE_URL: sqlserver://sa:${ZIRNIS_DB_PASSWORD:-Zirnis-local-0nly}@sqlserver:1433?database=zirnis&encrypt=disable
+    depends_on:
+      sqlserver-init:
+        condition: service_completed_successfully
+
+volumes:
+  sqlserver-data:
