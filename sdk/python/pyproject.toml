@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zirnis-ext"
+version = "1.0.0"
+description = "Write Zirnis core-banking extensions (suspense classifiers and matchers, clearing validators, nostro matchers, COB jobs) in Python."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools]
+packages = ["zirnis_ext"]

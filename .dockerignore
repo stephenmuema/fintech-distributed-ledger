@@ -1,0 +1,12 @@
+# The API image only needs go.mod, go.sum, cmd/, internal/ and pkg/.
+.git
+web
+sdk
+docs
+examples
+deploy
+scripts
+*.db
+*.db-*
+*.pdf
+.env

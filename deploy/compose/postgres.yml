@@ -1,0 +1,30 @@
+# PostgreSQL 18 for Zirnis. The base docker-compose.yml now runs PostgreSQL itself; this file is
+# kept so existing commands that add it keep working.
+# PostgreSQL 18 images keep data under /var/lib/postgresql/18/docker, so the volume mounts the
+# parent directory. A volume created by PostgreSQL 17 needs a dump and restore (or pg_upgrade).
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: zirnis
+      POSTGRES_USER: zirnis
+      POSTGRES_PASSWORD: ${ZIRNIS_DB_PASSWORD:-zirnis-local-only}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zirnis -d zirnis"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  api:
+    environment:
+      ZIRNIS_DATASOURCE: postgres
+      ZIRNIS_DATABASE_URL: postgres://zirnis:${ZIRNIS_DB_PASSWORD:-zirnis-local-only}@postgres:5432/zirnis?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

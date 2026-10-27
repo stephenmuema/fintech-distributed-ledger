@@ -1,0 +1,120 @@
+# Zirnis — fully containerised, production-safe by default: ZIRNIS_ENV=Production on PostgreSQL,
+# no simulated providers, no demo keys, no demo operators and no /sandbox endpoints.
+#
+#   docker compose up --build                                                         # production
+#   docker compose -f docker-compose.yml -f deploy/compose/sandbox.yml up --build     # demo sandbox
+#
+# Production needs, in .env (see .env.example):
+#   ZIRNIS_DB_PASSWORD               the PostgreSQL password (the database is not published to the host)
+#   ZIRNIS_BOOTSTRAP_ADMIN[_PASSWORD] the first console administrator; without a password a one-time
+#                                    password is printed once in the API log (docker compose logs api)
+#
+# Providers are modules (docs/integrations.md): run the ones you use with the "providers" profile,
+#   docker compose --profile providers up --build
+# each configured in deploy/modules/<module>.env (copy the .env.example next to it), with its
+# shared secret in .env (ZIRNIS_MODULE_<MODULE>_SECRET, passed to both the module and the API).
+# Then register each module endpoint and onboard its providers in the console (maker-checker).
+#
+# Other engines replace PostgreSQL: add deploy/compose/{mysql,sqlserver,oracle}.yml; a managed
+# database: set ZIRNIS_DATASOURCE / ZIRNIS_DATABASE_URL in .env. Backups: docs/runbooks/backup-restore.md.
+#
+# the internal network only: http://localhost:8080 — ops console · http://localhost:5080/docs — API reference
+# The internet: http://localhost:8081 — the payer edge (payment links, card returns, provider callbacks),
+# published behind TLS at ZIRNIS_PUBLIC_URL. Publish nothing else.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: zirnis
+      POSTGRES_USER: zirnis
+      POSTGRES_PASSWORD: ${ZIRNIS_DB_PASSWORD:-zirnis-local-only}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zirnis -d zirnis"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  api:
+    build: .
+    image: zirnis-api:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ZIRNIS_ENV: ${ZIRNIS_ENV:-Production}
+      ZIRNIS_BOOTSTRAP_ADMIN: ${ZIRNIS_BOOTSTRAP_ADMIN:-}
+      ZIRNIS_BOOTSTRAP_ADMIN_PASSWORD: ${ZIRNIS_BOOTSTRAP_ADMIN_PASSWORD:-}
+      ZIRNIS_DATASOURCE: ${ZIRNIS_DATASOURCE:-postgres}
+      ZIRNIS_DATABASE_URL: ${ZIRNIS_DATABASE_URL:-postgres://zirnis:${ZIRNIS_DB_PASSWORD:-zirnis-local-only}@postgres:5432/zirnis?sslmode=disable}
+      ZIRNIS_CORS_ORIGINS: ${ZIRNIS_CORS_ORIGINS:-http://localhost:8080}
+      ZIRNIS_EDGE_ADDR: ":8081" # the payer edge's listener, reached only through the web container's edge
+      ZIRNIS_PUBLIC_URL: ${ZIRNIS_PUBLIC_URL:-}
+      ZIRNIS_AUTO_COB_AT: ${ZIRNIS_AUTO_COB_AT:-23:00} # Close of Business runs itself nightly (Africa/Nairobi)
+      ZIRNIS_SETTLEMENT_INBOX: ${ZIRNIS_SETTLEMENT_INBOX:-/data/settlements} # COB reconciles <provider>_<YYYYMMDD>.csv dropped here
+      # Module secrets: each module endpoint's secretEnv names one of these.
+      ZIRNIS_MODULE_MPESA_SECRET: ${ZIRNIS_MODULE_MPESA_SECRET:-}
+      ZIRNIS_MODULE_KCB_SECRET: ${ZIRNIS_MODULE_KCB_SECRET:-}
+      ZIRNIS_MODULE_EQUITY_SECRET: ${ZIRNIS_MODULE_EQUITY_SECRET:-}
+    ports:
+      - "5080:8080"
+    volumes:
+      - zirnis-data:/data # the settlement and statement inboxes (and SQLite, if ever allowed)
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---- Provider modules (profile "providers"): reachable from the API only, never published ----
+  mpesa-module:
+    profiles: [providers]
+    build: { context: ., dockerfile: modules/Dockerfile, args: { MODULE: mpesa } }
+    image: zirnis-mpesa-module:local
+    env_file:
+      - path: deploy/modules/mpesa.env
+        required: false
+    environment:
+      ZIRNIS_MODULE_SECRET: ${ZIRNIS_MODULE_MPESA_SECRET:-}
+      ZIRNIS_PUBLIC_URL: ${ZIRNIS_PUBLIC_URL:-}
+    restart: unless-stopped
+
+  kcb-module:
+    profiles: [providers]
+    build: { context: ., dockerfile: modules/Dockerfile, args: { MODULE: kcb } }
+    image: zirnis-kcb-module:local
+    env_file:
+      - path: deploy/modules/kcb.env
+        required: false
+    environment:
+      ZIRNIS_MODULE_SECRET: ${ZIRNIS_MODULE_KCB_SECRET:-}
+      ZIRNIS_PUBLIC_URL: ${ZIRNIS_PUBLIC_URL:-}
+    restart: unless-stopped
+
+  equity-module:
+    profiles: [providers]
+    build: { context: ., dockerfile: modules/Dockerfile, args: { MODULE: equity } }
+    image: zirnis-equity-module:local
+    env_file:
+      - path: deploy/modules/equity.env
+        required: false
+    environment:
+      ZIRNIS_MODULE_SECRET: ${ZIRNIS_MODULE_EQUITY_SECRET:-}
+      ZIRNIS_PUBLIC_URL: ${ZIRNIS_PUBLIC_URL:-}
+    restart: unless-stopped
+
+  web:
+    build: ./web
+    image: zirnis-web:local
+    ports:
+      - "8080:8080" # the console: the internal network only
+      - "8081:8081" # the payer edge: the one port published to the internet
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  zirnis-data:
+  postgres-data:

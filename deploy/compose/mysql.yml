@@ -1,0 +1,31 @@
+# MySQL 9.7 LTS for Zirnis.
+#   docker compose -f docker-compose.yml -f deploy/compose/mysql.yml up --build
+services:
+  mysql:
+    image: mysql:9.7
+    # Zirnis creates append-only triggers; with binary logging on, a non-SUPER user needs this.
+    command: ["--log-bin-trust-function-creators=1"]
+    environment:
+      MYSQL_DATABASE: zirnis
+      MYSQL_USER: zirnis
+      MYSQL_PASSWORD: ${ZIRNIS_DB_PASSWORD:-zirnis-local-only}
+      MYSQL_ROOT_PASSWORD: ${ZIRNIS_DB_ROOT_PASSWORD:-zirnis-root-local-only}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u zirnis -p\"$$MYSQL_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+    restart: unless-stopped
+
+  api:
+    environment:
+      ZIRNIS_DATASOURCE: mysql
+      ZIRNIS_DATABASE_URL: mysql://zirnis:${ZIRNIS_DB_PASSWORD:-zirnis-local-only}@mysql:3306/zirnis
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  mysql-data:

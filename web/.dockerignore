@@ -1,0 +1,4 @@
+# The image installs its own (Linux) dependencies with npm ci; never copy the host's.
+node_modules
+dist
+*.log

@@ -1,0 +1,347 @@
+# Zirnis API walkthrough — run top to bottom (VS Code REST Client or a JetBrains IDE).
+# Amounts are integer minor units: 150000 = KES 1,500.00.
+
+@base = http://localhost:5080
+@platform = zr_platform_demo_key
+@amina = zr_ops_amina_demo_key
+@brian = zr_ops_brian_demo_key
+
+### 1 · Business dates (T24 DATES)
+GET {{base}}/core/dates
+Authorization: Bearer {{platform}}
+
+### 2 · Onboard a merchant (CIF)
+# @name merchant
+POST {{base}}/customers
+Authorization: Bearer {{platform}}
+Content-Type: application/json
+
+{ "type": "Business", "legalName": "Safari Tours Ltd", "email": "ops+{{$randomInt 1 99999}}@safaritours.co.ke", "phone": "+254712345678", "country": "KE" }
+
+### 3 · KYB — required before collecting or sending money
+POST {{base}}/customers/{{merchant.response.body.id}}/kyc
+Authorization: Bearer {{platform}}
+Content-Type: application/json
+
+{ "documentType": "certificate_of_incorporation", "documentNumber": "PVT-88812", "registrationNumber": "PVT-2019-88812", "directors": ["Amani Wanjiku"] }
+
+### 4 · Open a KES merchant current account (category 1001)
+# @name account
+POST {{base}}/accounts
+Authorization: Bearer {{platform}}
+Content-Type: application/json
+
+{ "customerId": "{{merchant.response.body.id}}", "currency": "KES" }
+
+### 5 · Collect a card payment on version COLLECTION.API — note the Idempotency-Key. Send it twice: one charge, replayed response.
+# Every money movement is a transaction (FT…) input on a version; the response carries the payment as "flow".
+# @name payment
+POST {{base}}/transactions
+Authorization: Bearer {{platform}}
+Idempotency-Key: demo-payment-001
+Content-Type: application/json
+
+{ "version": "COLLECTION.API", "creditAccount": "{{account.response.body.accountNumber}}", "amount": 1500000, "method": "Card", "source": "tok_visa", "narrative": "Mara safari deposit" }
+
+### 5a · The transaction record: parties, local fields, payment details, journal entries, flow record
+GET {{base}}/transactions/{{payment.response.body.reference}}
+Authorization: Bearer {{platform}}
+
+### 6 · Account enquiry — working / locked / online actual balance
+GET {{base}}/accounts/{{account.response.body.id}}
+Authorization: Bearer {{platform}}
+
+### 7 · Statement with T24-style transaction references
+GET {{base}}/accounts/{{account.response.body.id}}/statement
+Authorization: Bearer {{platform}}
+
+### 8 · Incident drill: take acquirer-a down, then repeat step 5 with a new key — it fails over to acquirer-b
+POST {{base}}/ops/providers/acquirer-a/outage
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+
+{ "down": true }
+
+### 9 · Restore acquirer-a
+POST {{base}}/ops/providers/acquirer-a/outage
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+
+{ "down": false }
+
+### 10 · M-Pesa STK push (asynchronous) — completes via signed webhook
+# @name stk
+POST {{base}}/transactions
+Authorization: Bearer {{platform}}
+Idempotency-Key: demo-stk-001
+Content-Type: application/json
+
+{ "version": "COLLECTION.API", "creditAccount": "{{account.response.body.accountNumber}}", "amount": 250000, "method": "MobileMoney", "source": "+254722334455" }
+
+### 11 · Sandbox: the customer approves on their phone (provider callback)
+POST {{base}}/sandbox/providers/mpesa/events
+Authorization: Bearer {{platform}}
+Content-Type: application/json
+
+{ "type": "charge.succeeded", "reference": "{{stk.response.body.providerReference}}", "amount": 250000, "currency": "KES", "details": { "receipt": "QK7H2ZX9" } }
+
+### 12 · Bank payout (PesaLink) on version PAYOUT.API — risk-scored; large first payouts land in review
+POST {{base}}/transactions
+Authorization: Bearer {{platform}}
+Idempotency-Key: demo-payout-001
+Content-Type: application/json
+
+{ "version": "PAYOUT.API", "debitAccount": "{{account.response.body.accountNumber}}", "amount": 300000, "rail": "Bank",
+  "beneficiary": { "account": "1234567890", "name": "Mara Camps Ltd", "bankCode": "11" } }
+
+### 13 · Trial balance — debits equal credits in every currency
+GET {{base}}/ops/gl/trial-balance
+Authorization: Bearer {{amina}}
+
+### 14 · Balance sheet in local currency
+GET {{base}}/ops/gl/balance-sheet
+Authorization: Bearer {{amina}}
+
+### 15 · Maker: input a pricing change (INAU)
+# @name change
+POST {{base}}/ops/parameters/charges/CARDCOLL
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+
+{ "description": "Card acquiring", "basisPoints": 275 }
+
+### 16 · The maker cannot authorise their own change → 422 self_authorisation
+POST {{base}}/ops/parameters/pending/{{change.response.body.id}}/authorise
+Authorization: Bearer {{amina}}
+
+### 17 · Checker authorises → takes effect, previous version kept in $HIS
+POST {{base}}/ops/parameters/pending/{{change.response.body.id}}/authorise
+Authorization: Bearer {{brian}}
+
+### 18 · Close of Business — accrual, EOD snapshots, trial balance & integrity checks, date roll
+POST {{base}}/ops/cob/run
+Authorization: Bearer {{amina}}
+
+### 19 · Verify the tamper-evident audit chain
+GET {{base}}/ops/audit/verify
+Authorization: Bearer {{amina}}
+
+### 20 · Suspense ageing — every amount in suspense is an item with an age and an owner
+GET {{base}}/ops/suspense/ageing
+Authorization: Bearer {{amina}}
+
+### 21 · Maker: a suspense type tailored to unidentified M-Pesa receipts (INAU)
+# @name suspenseType
+POST {{base}}/ops/suspense/types/UNIDMPESA
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+
+{ "name": "Unidentified M-Pesa receipts", "description": "Paybill receipts with no matching account",
+  "side": "Credit", "currencies": ["KES"], "warnAfterDays": 2, "escalateAfterDays": 7, "cobPolicy": "Warn",
+  "allowedTargets": ["Customer"],
+  "localFields": [{ "name": "msisdn", "label": "Payer MSISDN", "type": "text", "required": true, "pattern": "^2547\\d{8}$" }] }
+
+### 22 · Checker authorises → category allocated (14100–14999), one account per currency opened
+POST {{base}}/ops/parameters/pending/{{suspenseType.response.body.id}}/authorise
+Authorization: Bearer {{brian}}
+
+### 23 · Raise an item in GENERAL suspense against the settlement bank (INAU; contra must be internal or P&L)
+# @name item
+POST {{base}}/ops/suspense/items
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+Idempotency-Key: walkthrough-suspense-raise-1
+
+{ "type": "GENERAL", "currency": "KES", "amount": 250000, "contraAccountNumber": "KES140020001",
+  "reference": "STMT-2026-10-28-7", "narrative": "Unexplained debit on the settlement account" }
+
+### 24 · Checker posts it
+POST {{base}}/ops/suspense/items/{{item.response.body.id}}/authorise
+Authorization: Bearer {{brian}}
+
+### 25 · Maker: clear part of it to processing costs (the type's validators may veto)
+# @name clearing
+POST {{base}}/ops/suspense/items/{{item.response.body.id}}/clearings
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+Idempotency-Key: walkthrough-suspense-clear-1
+
+{ "targetAccountNumber": "PL60100KES", "amount": 100000, "narrative": "Bank charges identified" }
+
+### 26 · Checker authorises the clearing → item PartiallyCleared
+POST {{base}}/ops/suspense/clearings/{{clearing.response.body.id}}/authorise
+Authorization: Bearer {{brian}}
+
+### 27 · Nostros: the platform's floats and settlement bank, with open items and the latest proof
+# @name nostros
+GET {{base}}/ops/nostros?live=true
+Authorization: Bearer {{amina}}
+
+### 28 · Receive a statement (MT940/MT950, camt.053 or CSV) for the first nostro — matched, parked after parkAfterDays, proved
+POST {{base}}/ops/nostros/{{nostros.response.body.$[0].id}}/statements
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+
+{ "format": "csv", "content": "value_date,direction,amount,bank_reference,customer_reference,narrative\n2026-10-28,Debit,2500,BNK01,,SERVICE CHARGE\n",
+  "openingBalance": 0, "closingBalance": -2500 }
+
+### 29 · Extensions (local routines) and their health
+GET {{base}}/core/extensions
+Authorization: Bearer {{amina}}
+
+### 30 · Register a remote extension (Python or Go) — the secret is named, never sent (INAU)
+POST {{base}}/ops/parameters/hooks/mpesa-matcher
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+
+{ "url": "http://localhost:8090", "hooks": ["suspense.classify", "suspense.match", "suspense.validate_clearing"],
+  "secretEnv": "ZIRNIS_HOOK_SECRET", "timeoutMs": 3000, "failurePolicy": "FailOpen" }
+
+### 31 · Onboard Tieto prepaid cards: opens TIETOOUT (GL 2530) and a settlement account, binds the module (INAU)
+# @name tieto
+POST {{base}}/ops/channels/TIETO
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+
+{ "name": "Tieto prepaid cards", "outward": true, "currencies": ["KES"], "extension": "tieto-loader",
+  "maxAmount": 10000000, "localFields": [{ "name": "card_token", "label": "Card token", "type": "text", "required": true }] }
+
+### 32 · Checker authorises → the provider's books exist before any code runs
+POST {{base}}/ops/parameters/pending/{{tieto.response.body.id}}/authorise
+Authorization: Bearer {{brian}}
+
+### 33 · Load a card on version OT.API: debits the customer into TIETOOUT and fires the tieto-loader module → Completed / Returned / Pending
+POST {{base}}/transactions
+Authorization: Bearer {{platform}}
+Content-Type: application/json
+Idempotency-Key: walkthrough-tieto-load-1
+
+{ "version": "OT.API", "channelCode": "TIETO", "debitAccount": "{{account.response.body.accountNumber}}", "amount": 250000, "attributes": { "card_token": "tok_4242" } }
+
+### 34 · The channel's books, transfers and module events
+GET {{base}}/ops/channels/TIETO
+Authorization: Bearer {{amina}}
+
+### 35 · Built-in providers are channels too: MPESA, KCB, EQUITY, PESALINK, ACQUIRERA … each with {CODE}IN and {CODE}OUT
+GET {{base}}/ops/channels
+Authorization: Bearer {{amina}}
+
+### 36 · What M-Pesa holds for us right now: payouts waiting in MPESAOUT, unidentified paybill money in MPESAIN
+GET {{base}}/ops/channels/MPESA/transfers
+Authorization: Bearer {{amina}}
+
+### 37 · Bind the matcher to M-Pesa's inward book; matches at 95% or more apply straight through (INAU)
+POST {{base}}/ops/channels/MPESA
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+
+{ "name": "M-Pesa", "inward": true, "outward": true, "currencies": ["KES", "NGN", "TZS", "UGX", "USD", "EUR", "GBP"],
+  "extension": "mpesa-matcher", "autoClearAt": 95 }
+
+### 38 · Maker: a local field on every transaction — a real column of lt_transaction once authorised (INAU)
+# @name localTxn
+POST {{base}}/ops/local-tables/TRANSACTION
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+
+{ "kind": "reference", "description": "Wallet transaction fields", "authorisers": 1,
+  "fields": [{ "name": "mpesa_till", "label": "Till number", "type": "text", "pattern": "^\\d{5,7}$", "searchable": true }] }
+
+### 39 · Checker authorises → ALTER TABLE lt_transaction ADD COLUMN l_mpesa_till (see the DDL and its status)
+POST {{base}}/ops/parameters/pending/{{localTxn.response.body.id}}/authorise
+Authorization: Bearer {{brian}}
+
+### 40 · Maker: a transaction type (FT.TXN.TYPE.CONDITION) and a version (VERSION) for till payments (INAU each)
+# @name tillType
+POST {{base}}/ops/transaction-types/ACMM
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+
+{ "description": "M-Pesa till payment", "flow": "transfer", "reportingClass": "MM01", "currencies": ["KES"] }
+
+### 41 · Checker authorises the type
+POST {{base}}/ops/parameters/pending/{{tillType.response.body.id}}/authorise
+Authorization: Bearer {{brian}}
+
+### 42 · The version: fixed till account, a mandatory local field, high values to a checker
+# @name tillVersion
+POST {{base}}/ops/versions/MPESA.TILL
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+
+{ "description": "Pay a merchant till", "transactionType": "ACMM", "channels": ["api"], "authorisers": 0,
+  "fields": [{ "field": "debitAccount", "mandatory": true }, { "field": "creditAccount", "noInput": true, "default": "{{account.response.body.accountNumber}}" },
+             { "field": "amount", "mandatory": true }, { "field": "local.mpesa_till", "mandatory": true }],
+  "overrides": { "HIGH.VALUE": "checker", "NEW.BENEFICIARY": "ignore" } }
+
+### 43 · Checker authorises the version
+POST {{base}}/ops/parameters/pending/{{tillVersion.response.body.id}}/authorise
+Authorization: Bearer {{brian}}
+
+### 44 · An enquiry over transactions, selecting on the local field (INAU), then run it — JSON or CSV
+# @name tillEnquiry
+POST {{base}}/ops/enquiries/TXN.BY.TILL
+Authorization: Bearer {{amina}}
+Content-Type: application/json
+
+{ "description": "Till payments", "application": "TRANSACTION",
+  "prompts": [{ "field": "local.mpesa_till", "op": "EQ", "mandatory": true }],
+  "columns": [{ "field": "reference" }, { "field": "amount" }, { "field": "local.mpesa_till", "label": "Till" }, { "field": "details.mpesa.receipt", "label": "Receipt" }] }
+
+### 45 · Checker authorises the enquiry
+POST {{base}}/ops/parameters/pending/{{tillEnquiry.response.body.id}}/authorise
+Authorization: Bearer {{brian}}
+
+### 46 · Run it
+GET {{base}}/ops/enquiries/TXN.BY.TILL/run?local.mpesa_till=174379
+Authorization: Bearer {{amina}}
+
+### 47 · The onboarding policy: is KYC required to sign up? (true until administrators decide otherwise)
+GET {{base}}/onboarding/policy
+Authorization: Bearer {{platform}}
+
+### 48 · A customer signs up in the customer app: customer, KYC and accounts in one request
+POST {{base}}/onboarding
+Authorization: Bearer {{platform}}
+Content-Type: application/json
+Idempotency-Key: {{$guid}}
+
+{ "customer": { "type": "Individual", "legalName": "Wanjiru Kamau", "email": "wanjiru+{{$randomInt 1 99999}}@example.co.ke", "phone": "+254712345678", "country": "KE" },
+  "kyc": { "documentType": "national_id", "documentNumber": "29876543", "dateOfBirth": "1990-05-17" },
+  "currencies": ["KES", "USD"] }
+
+# Making KYC optional is an administrator's change in the console (Operators → Customer onboarding),
+# POST /ops/onboarding-policy { "kycRequired": false, "reason": "…" }, authorised by another operator.
+
+### 49 · The app's backend changes a customer's phone, acting for that customer (On-Behalf-Of goes into the change log)
+POST {{base}}/customers/{{merchant.response.body.id}}/details
+Authorization: Bearer {{platform}}
+On-Behalf-Of: cust-8841
+Content-Type: application/json
+
+{ "phone": "+254700111222" }
+
+### 50 · The change log: who changed which field, when, from what to what
+GET {{base}}/customers/{{merchant.response.body.id}}/changes
+Authorization: Bearer {{platform}}
+
+### 51 · A customer's cards
+GET {{base}}/cards?customerId={{merchant.response.body.id}}
+Authorization: Bearer {{platform}}
+
+### 52 · Close an account (refused while it holds money, cards, links, standing orders or unfinished transactions)
+POST {{base}}/accounts/{{account.response.body.id}}/close
+Authorization: Bearer {{platform}}
+On-Behalf-Of: cust-8841
+Content-Type: application/json
+
+{ "reason": "Customer moving to another bank" }
+
+### 53 · Sign in as the BI analyst (the session cookie is kept for the next request)
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{ "username": "wanjiru", "password": "zirnis-sandbox-demo" }
+
+### 54 · Business intelligence: KPIs against the previous period, volume by day, breakdowns, top merchants
+GET {{base}}/ops/analytics?from=2026-10-01&to=2026-10-31&currency=KES
