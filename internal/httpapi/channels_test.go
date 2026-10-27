@@ -202,13 +202,13 @@ func (m *airtelModule) OnFunds(_ context.Context, e extapi.FundsEvent) (extapi.F
 
 func airtelHarness(t *testing.T) (*harness, *airtelModule, *extapi.Client) {
 	const secret = "airtel-shared-secret"
-	t.Setenv("ZIRNIS_TEST_AIRTEL_SECRET", secret)
+	env := secretEnv(t, "ZIRNIS_TEST_AIRTEL_SECRET", secret)
 	module := &airtelModule{wallets: map[string]string{}}
 	remote := httptest.NewServer(extapi.Handler(module, secret))
 	t.Cleanup(remote.Close)
 	h := newHarness(t)
 	h.amina().post("/ops/parameters/hooks/airtel", map[string]any{"url": remote.URL, "hooks": []string{"suspense.opened"},
-		"secretEnv": "ZIRNIS_TEST_AIRTEL_SECRET", "failurePolicy": "FailOpen"}).expect(202)
+		"secretEnv": env, "failurePolicy": "FailOpen"}).expect(202)
 	authorisePending(h, "airtel")
 	onboard(h, "AIRTEL", map[string]any{"name": "Airtel Money", "inward": true, "outward": true, "currencies": []string{"KES"}, "extension": "airtel",
 		"localFields": []map[string]any{{"name": "msisdn", "label": "MSISDN", "type": "text", "pattern": `^2547\d{8}$`}}})
