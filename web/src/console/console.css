@@ -1,0 +1,383 @@
+@reference "../index.css";
+
+@layer components {
+
+/* The console's shared classes, drawn with the shadcn/ui tokens (index.css) so every page —
+   including those still written with plain elements — has the same cards, inputs, tables and
+   badges as the shadcn components, in light and dark. */
+
+/* ---- Type ---------------------------------------------------------------------------------- */
+
+.mono,
+pre,
+code {
+  @apply font-mono text-[0.8125rem] tracking-tight;
+}
+.mono-label {
+  @apply text-[0.6875rem] font-medium tracking-wide text-muted-foreground uppercase;
+}
+.muted {
+  @apply text-muted-foreground;
+}
+.intro {
+  @apply -mt-2 mb-5 max-w-3xl text-sm text-muted-foreground;
+}
+h3.sub {
+  @apply mt-6 mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase;
+}
+.good-text {
+  @apply text-success;
+}
+.error-text {
+  @apply text-destructive;
+}
+
+/* ---- Page structure -------------------------------------------------------------------------- */
+
+.page-header {
+  @apply mb-6 flex flex-wrap items-end justify-between gap-4;
+}
+.page-header h1 {
+  @apply text-2xl font-semibold tracking-tight;
+}
+.page-actions {
+  @apply flex flex-wrap items-center gap-2;
+}
+/* minmax(0, …) at every width: a wide table scrolls inside its panel instead of widening the page. */
+.grid-2 {
+  @apply grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-2;
+}
+.grid-main-side {
+  @apply grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)];
+}
+.grid-side-main {
+  @apply grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.7fr)];
+}
+.grid-2,
+.grid-main-side,
+.grid-side-main {
+  @apply mb-4 items-start;
+}
+.stack {
+  @apply flex flex-col gap-4;
+}
+
+/* Panel is a shadcn Card (ui.tsx); this keeps nested panels and loose content tidy. */
+.panel table {
+  @apply mt-1;
+}
+.panel-link {
+  @apply text-sm font-medium text-primary hover:underline;
+}
+
+.stat-grid {
+  @apply mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6;
+}
+
+/* ---- Tables (the shadcn Table look for every <table>) ------------------------------------------ */
+
+table {
+  @apply w-full caption-bottom border-collapse text-sm;
+}
+thead tr {
+  @apply border-b;
+}
+th {
+  @apply h-9 px-2 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground;
+}
+td {
+  @apply border-b px-2 py-2 align-middle;
+}
+tbody tr:last-child td {
+  @apply border-b-0;
+}
+tbody tr {
+  @apply transition-colors;
+}
+tbody tr:hover td {
+  @apply bg-muted/40;
+}
+.num {
+  @apply text-right tabular-nums;
+}
+.nowrap {
+  @apply whitespace-nowrap;
+}
+td.debit {
+  @apply text-destructive;
+}
+td.credit {
+  @apply text-success;
+}
+tr.clickable {
+  @apply cursor-pointer;
+}
+tr.selected td {
+  @apply bg-accent;
+}
+tr.group-row td {
+  @apply bg-muted/60 text-xs font-semibold tracking-wide text-muted-foreground uppercase;
+}
+table.proof td {
+  @apply py-1.5;
+}
+table.proof tr.total td {
+  @apply border-t-2 font-semibold;
+}
+
+/* ---- Forms (the shadcn Input look for plain inputs) ----------------------------------------- */
+
+.form {
+  @apply flex flex-col gap-4;
+}
+.field {
+  @apply flex flex-col gap-1.5 text-sm;
+}
+.field > .mono-label {
+  @apply text-xs font-medium tracking-normal text-foreground normal-case;
+}
+.field small {
+  @apply text-xs;
+}
+.row-2 {
+  @apply grid gap-4 sm:grid-cols-2;
+}
+.row-3 {
+  @apply grid gap-4 sm:grid-cols-3;
+}
+.row-4 {
+  @apply grid gap-4 sm:grid-cols-2 lg:grid-cols-4;
+}
+.field-row {
+  @apply grid items-end gap-2 lg:grid-cols-[1fr_1.2fr_0.8fr_1.6fr_auto_auto];
+}
+.design-row {
+  @apply grid items-center gap-2 border-b py-2 lg:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))_auto];
+}
+
+input:not([type='checkbox'], [type='radio'], [type='file']),
+select,
+textarea {
+  @apply h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none;
+  @apply placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30;
+  @apply focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40;
+  @apply aria-invalid:border-destructive;
+}
+textarea {
+  @apply h-auto min-h-16 py-2;
+}
+select {
+  @apply pr-8;
+}
+input.mono {
+  @apply font-mono;
+}
+input[type='checkbox'],
+input[type='radio'] {
+  @apply size-4 accent-primary;
+}
+.check {
+  @apply inline-flex items-center gap-2 text-sm;
+}
+.chips {
+  @apply flex flex-wrap gap-x-4 gap-y-2;
+}
+.inline-form {
+  @apply flex flex-wrap items-end gap-2;
+}
+.inline-form > input,
+.inline-form > select {
+  @apply w-auto min-w-40 flex-1;
+}
+.inline-form .field {
+  @apply min-w-40 flex-1;
+}
+.as-of {
+  @apply flex items-center gap-2 text-sm;
+}
+.row-2 > .actions,
+.row-3 > .actions,
+.row-4 > .actions {
+  @apply self-end;
+}
+
+.segmented {
+  @apply inline-flex h-9 items-center rounded-lg bg-muted p-1 text-muted-foreground;
+}
+.segmented button {
+  @apply inline-flex h-7 items-center rounded-md px-3 text-sm font-medium transition-all hover:text-foreground;
+}
+.segmented button.on {
+  @apply bg-background text-foreground shadow-sm dark:bg-input/40;
+}
+
+.actions {
+  @apply flex flex-wrap items-center gap-2;
+}
+td.actions {
+  @apply justify-end text-right;
+}
+.link-btn {
+  @apply cursor-pointer text-sm font-medium text-primary underline-offset-4 hover:underline disabled:opacity-50;
+}
+
+/* ---- Feedback --------------------------------------------------------------------------------- */
+
+.callout {
+  @apply rounded-lg border bg-muted/50 p-4 text-sm;
+}
+.callout.warn {
+  @apply border-warning/40 bg-warning/10;
+}
+.callout ul {
+  @apply my-2 list-disc pl-5;
+}
+.empty,
+.loading {
+  @apply py-6 text-center text-sm;
+}
+.result {
+  @apply mt-4 rounded-lg border bg-muted/40 p-4 text-sm;
+}
+.result-head {
+  @apply flex flex-wrap items-center gap-2;
+}
+.attempts {
+  @apply mt-2 text-xs;
+}
+.share-link {
+  @apply mt-2 rounded-md border bg-background px-3 py-2 font-mono text-xs break-all;
+}
+
+/* A badge's colour by status (ui.tsx); also used as a plain class. */
+.badge {
+  @apply inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium whitespace-nowrap;
+}
+.tag {
+  @apply inline-flex items-center rounded-md bg-secondary px-1.5 py-0.5 font-mono text-[0.6875rem] text-secondary-foreground;
+}
+
+/* ---- Lists and records ----------------------------------------------------------------------- */
+
+.facts {
+  @apply my-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3;
+}
+.facts dt {
+  @apply text-xs text-muted-foreground;
+}
+.facts dd {
+  @apply m-0 text-sm font-medium;
+}
+.kv {
+  @apply grid grid-cols-[minmax(140px,max-content)_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm;
+}
+.kv dt {
+  @apply text-muted-foreground;
+}
+.kv dd {
+  @apply m-0 break-words;
+}
+.kv + .kv {
+  @apply mt-3 border-t pt-3;
+}
+.journal-feed,
+.audit-feed,
+.run-list {
+  @apply m-0 flex list-none flex-col p-0;
+}
+.journal-feed li,
+.audit-feed li {
+  @apply grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b py-2 text-sm last:border-b-0;
+}
+.run-list button {
+  @apply flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted;
+}
+.run-list button.on {
+  @apply bg-accent;
+}
+.approval {
+  @apply flex flex-wrap items-start justify-between gap-3 border-b py-3 last:border-b-0;
+}
+.approval p {
+  @apply mt-1 text-sm text-muted-foreground;
+}
+.payload,
+.json,
+.ddl {
+  @apply mt-2 block max-h-80 overflow-auto rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap break-all;
+}
+.cob-run {
+  @apply border-b last:border-b-0;
+}
+.cob-run-head {
+  @apply flex w-full cursor-pointer items-center justify-between gap-3 py-3 text-left text-sm hover:bg-muted/40;
+}
+.push {
+  @apply ml-auto;
+}
+.cob-run-body {
+  @apply pb-4;
+}
+.txn p {
+  @apply text-sm;
+}
+.version-list {
+  @apply grid gap-2;
+}
+.version-pick {
+  @apply grid gap-0.5 rounded-lg border p-3 text-left text-sm transition-colors hover:bg-muted/50;
+}
+.version-pick.on {
+  @apply border-primary bg-primary/5 ring-1 ring-primary;
+}
+.match-grid {
+  @apply grid gap-4 md:grid-cols-2;
+}
+.proof {
+  @apply text-sm;
+}
+
+/* ---- Hosted checkout (public) ----------------------------------------------------------------- */
+
+.checkout {
+  @apply flex min-h-svh items-center justify-center bg-muted/40 p-4;
+}
+.checkout-amount {
+  @apply text-3xl font-semibold tracking-tight;
+}
+.checkout .form .btn,
+.checkout .segmented {
+  @apply w-full;
+}
+.checkout .segmented button {
+  @apply flex-1 justify-center;
+}
+.checkout-result {
+  @apply rounded-lg border p-4 text-sm;
+}
+.checkout-result.good {
+  @apply border-success/40 bg-success/10;
+}
+.checkout-result.bad {
+  @apply border-destructive/40 bg-destructive/10;
+}
+.checkout-foot {
+  @apply text-center text-xs text-muted-foreground;
+}
+
+/* Links styled as buttons (a.btn), matching the shadcn Button. */
+.btn {
+  @apply inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium whitespace-nowrap transition-all disabled:pointer-events-none disabled:opacity-50;
+}
+.btn-primary {
+  @apply bg-primary text-primary-foreground shadow-xs hover:bg-primary/90;
+}
+.btn-ghost {
+  @apply border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30;
+}
+
+/* Panels stacked directly on a page keep the grid's spacing. */
+.panel + .panel {
+  @apply mt-4;
+}
+}

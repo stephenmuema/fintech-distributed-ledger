@@ -1,0 +1,15 @@
+# The demo sandbox: simulated providers, the public demo API keys, the demo console operators
+# (amina / brian / admin, password zirnis-sandbox-demo) and the /sandbox endpoints.
+#   docker compose -f docker-compose.yml -f deploy/compose/sandbox.yml up --build
+# Never with real money or real customers.
+services:
+  api:
+    environment:
+      ZIRNIS_ENV: Development
+
+  # The sandbox's PostgreSQL on this machine only (127.0.0.1:5433), for DBeaver, psql or any SQL
+  # client: database zirnis, user zirnis, password ZIRNIS_DB_PASSWORD (default zirnis-local-only).
+  # The production file never publishes the database.
+  postgres:
+    ports:
+      - "127.0.0.1:5433:5432"

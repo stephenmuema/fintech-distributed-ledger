@@ -1,0 +1,132 @@
+name: Databases
+
+# The full integration suite against every production engine, each test in its own database.
+# Runs when persistence-relevant code changes, weekly, and on demand — not on every push — to
+# keep a private repository well inside the free Actions minutes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "internal/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/databases.yml"
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: databases-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres:
+    name: PostgreSQL 18 (+ MongoDB evidence copy)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: Zirnis-CI-0nly
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 30
+      mongodb:
+        image: mongo:9.0
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1})'" --health-interval 5s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Integration suite on PostgreSQL
+        env:
+          ZIRNIS_TEST_DATASOURCE: postgres
+          ZIRNIS_TEST_DATABASE_URL: postgres://postgres:Zirnis-CI-0nly@localhost:5432/postgres?sslmode=disable
+          ZIRNIS_TEST_MONGODB_URI: mongodb://localhost:27017
+        run: go test -count=1 -timeout 30m ./internal/httpapi/...
+
+  mysql:
+    name: MySQL 9.7 LTS
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:9.7
+        env:
+          MYSQL_ROOT_PASSWORD: Zirnis-CI-0nly
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pZirnis-CI-0nly --silent" --health-interval 5s --health-timeout 5s --health-retries 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Integration suite on MySQL
+        env:
+          ZIRNIS_TEST_DATASOURCE: mysql
+          ZIRNIS_TEST_DATABASE_URL: mysql://root:Zirnis-CI-0nly@localhost:3306/
+        run: go test -count=1 -timeout 30m ./internal/httpapi/...
+
+  sqlserver:
+    name: SQL Server 2025
+    runs-on: ubuntu-latest
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2025-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: Zirnis-CI-0nly
+        ports: ["1433:1433"]
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Zirnis-CI-0nly -Q 'SELECT 1' -b -o /dev/null"
+          --health-interval 10s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Integration suite on SQL Server
+        env:
+          ZIRNIS_TEST_DATASOURCE: sqlserver
+          ZIRNIS_TEST_DATABASE_URL: sqlserver://sa:Zirnis-CI-0nly@localhost:1433?database=master&encrypt=disable
+        run: go test -count=1 -timeout 40m ./internal/httpapi/...
+
+  oracle:
+    name: Oracle Database 23ai Free
+    runs-on: ubuntu-latest
+    services:
+      oracle:
+        image: gvenzl/oracle-free:23-slim
+        env:
+          ORACLE_PASSWORD: Zirnis-CI-0nly
+        ports: ["1521:1521"]
+        options: >-
+          --health-cmd healthcheck.sh --health-interval 10s --health-timeout 5s --health-retries 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Integration suite on Oracle
+        env:
+          ZIRNIS_TEST_DATASOURCE: oracle
+          ZIRNIS_TEST_DATABASE_URL: oracle://system:Zirnis-CI-0nly@localhost:1521/FREEPDB1
+        run: go test -count=1 -timeout 40m ./internal/httpapi/...
+
+  compose:
+    name: Compose files are valid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate every database override
+        run: |
+          for db in postgres mysql sqlserver oracle; do
+            docker compose -f docker-compose.yml -f deploy/compose/$db.yml -f deploy/compose/mongodb.yml config --quiet
+            echo "✓ $db"
+          done

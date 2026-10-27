@@ -1,0 +1,30 @@
+# PgBouncer between the API and PostgreSQL, in transaction mode, as on Kubernetes
+# (deploy/kubernetes/pgbouncer.yaml):
+#
+#   docker compose -f docker-compose.yml -f deploy/compose/pgbouncer.yml up -d --build
+#
+# Zirnis's driver (pgx) prepares statements, which transaction pooling supports only with
+# max_prepared_statements set (PgBouncer 1.21+); without it, units of work fail.
+services:
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.24.1-p1
+    environment:
+      DB_HOST: postgres
+      DB_USER: zirnis
+      DB_PASSWORD: ${ZIRNIS_DB_PASSWORD:-zirnis-local-only}
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_PREPARED_STATEMENTS: "200"
+      MAX_CLIENT_CONN: "1000"
+      DEFAULT_POOL_SIZE: "40"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    environment:
+      ZIRNIS_DATABASE_URL: ${ZIRNIS_DATABASE_URL:-postgres://zirnis:${ZIRNIS_DB_PASSWORD:-zirnis-local-only}@pgbouncer:5432/zirnis?sslmode=disable}
+    depends_on:
+      pgbouncer:
+        condition: service_started

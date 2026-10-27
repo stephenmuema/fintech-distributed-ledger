@@ -1,0 +1,31 @@
+# Oracle Database 23ai Free for Zirnis (gvenzl/oracle-free, amd64 and arm64).
+#   docker compose -f docker-compose.yml -f deploy/compose/oracle.yml up --build
+# First start initialises the database and takes a minute or two.
+services:
+  oracle:
+    image: gvenzl/oracle-free:23-slim
+    environment:
+      ORACLE_PASSWORD: ${ZIRNIS_DB_ROOT_PASSWORD:-zirnis-root-local-only}
+      # Creates the ZIRNIS schema in FREEPDB1 with CONNECT and RESOURCE (tables, triggers, sequences).
+      APP_USER: zirnis
+      APP_USER_PASSWORD: ${ZIRNIS_DB_PASSWORD:-zirnis-local-only}
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    restart: unless-stopped
+
+  api:
+    environment:
+      ZIRNIS_DATASOURCE: oracle
+      ZIRNIS_DATABASE_URL: oracle://zirnis:${ZIRNIS_DB_PASSWORD:-zirnis-local-only}@oracle:1521/FREEPDB1
+    depends_on:
+      oracle:
+        condition: service_healthy
+
+volumes:
+  oracle-data:

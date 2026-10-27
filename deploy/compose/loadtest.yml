@@ -1,0 +1,7 @@
+# Load testing the sandbox (cmd/loadtest, docs/runbooks/load-testing.md). Only the per-client
+# rate limit changes, so the test measures the core rather than the limiter:
+#   docker compose -f docker-compose.yml -f deploy/compose/sandbox.yml -f deploy/compose/loadtest.yml up -d --build
+services:
+  api:
+    environment:
+      ZIRNIS_RATE_LIMIT_PER_MINUTE: "10000000"

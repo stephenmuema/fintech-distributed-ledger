@@ -1,0 +1,236 @@
+name: Security
+
+# Free, open-source scanning that works on a private repository without paid GitHub
+# add-ons: gosec, staticcheck, Semgrep, Gitleaks, govulncheck, npm audit, OSV-Scanner,
+# Trivy, OWASP ZAP and Burp Suite Dastardly. Each job attaches its report to the run as
+# an artifact and writes a findings summary.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1" # weekly, to catch newly published CVEs in unchanged code
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go-sast:
+    name: SAST · gosec + staticcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Install analyzers
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+      - name: gosec — every finding → SARIF report
+        run: gosec -no-fail -fmt sarif -out gosec.sarif ./...
+      - name: Summary
+        if: always()
+        run: python3 .github/scripts/sarif-summary.py
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: gosec-report
+          path: gosec.sarif
+          if-no-files-found: ignore
+      - name: Gate — high-severity, high-confidence gosec findings
+        run: gosec -severity high -confidence high ./...
+      - name: Gate — staticcheck (bugs, unused code, suspicious constructs)
+        run: staticcheck ./...
+
+  semgrep:
+    name: SAST · Semgrep
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v7
+      - name: Scan (all findings → SARIF report)
+        run: >
+          semgrep scan --metrics off
+          --config p/golang --config p/typescript --config p/react
+          --config p/dockerfile --config p/github-actions --config p/secrets
+          --exclude "**/migrations/**"
+          --sarif --output semgrep.sarif
+      - name: Summary
+        if: always()
+        run: python3 .github/scripts/sarif-summary.py
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: semgrep-report
+          path: semgrep.sarif
+          if-no-files-found: ignore
+      - name: Gate on ERROR-severity findings
+        run: >
+          semgrep scan --metrics off --severity ERROR --error
+          --config p/golang --config p/typescript --config p/react
+          --config p/dockerfile --config p/github-actions --config p/secrets
+          --exclude "**/migrations/**"
+
+  secrets:
+    name: Secrets · Gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # scan the full history, not just the last commit
+      - name: Scan git history
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 \
+            git /repo --config /repo/.gitleaks.toml --redact --verbose \
+            --report-format sarif --report-path /repo/gitleaks.sarif
+      - name: Summary
+        if: always()
+        run: python3 .github/scripts/sarif-summary.py
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: gitleaks-report
+          path: gitleaks.sarif
+          if-no-files-found: ignore
+
+  dependencies:
+    name: Dependencies · govulncheck, npm, OSV-Scanner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: govulncheck — known vulnerabilities reachable from our code (modules + stdlib)
+        shell: bash # runs with -eo pipefail, so tee can't hide a failing scan
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./... | tee govulncheck.txt
+      - name: npm audit (high and above)
+        working-directory: web
+        run: |
+          npm ci
+          npm audit --audit-level=high
+      - name: OSV-Scanner (all lockfiles, OSV.dev database)
+        run: |
+          docker run --rm -v "$PWD:/src" ghcr.io/google/osv-scanner:v2.7.0 \
+            scan source -r /src --format sarif --output /src/osv.sarif
+      - name: Summary
+        if: always()
+        run: python3 .github/scripts/sarif-summary.py
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: dependency-reports
+          path: |
+            osv.sarif
+            govulncheck.txt
+          if-no-files-found: ignore
+
+  containers:
+    name: Containers · Trivy (images + Dockerfiles)
+    runs-on: ubuntu-latest
+    env:
+      TRIVY: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}:/src -v trivy-cache:/root/.cache aquasec/trivy:0.76.0
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build images
+        run: |
+          docker build -t zirnis-api:ci .
+          docker build -t zirnis-web:ci web
+      - name: Report — image vulnerabilities and Dockerfile misconfigurations
+        run: |
+          $TRIVY image --severity HIGH,CRITICAL --format sarif --output /src/trivy-api.sarif zirnis-api:ci
+          $TRIVY image --severity HIGH,CRITICAL --format sarif --output /src/trivy-web.sarif zirnis-web:ci
+          $TRIVY config --severity MEDIUM,HIGH,CRITICAL --format sarif --output /src/trivy-config.sarif /src
+      - name: Summary
+        if: always()
+        run: python3 .github/scripts/sarif-summary.py
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: trivy-reports
+          path: "*.sarif"
+          if-no-files-found: ignore
+      - name: Gate — fixable CRITICAL CVEs or HIGH Dockerfile misconfigurations
+        run: |
+          $TRIVY image --severity CRITICAL --ignore-unfixed --exit-code 1 zirnis-api:ci
+          $TRIVY image --severity CRITICAL --ignore-unfixed --exit-code 1 zirnis-web:ci
+          $TRIVY config --severity HIGH,CRITICAL --exit-code 1 /src
+
+  dast:
+    name: DAST · OWASP ZAP + Burp Suite Dastardly
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      API: http://localhost:5080
+      WEB: http://localhost:8080
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Start the stack (API + web) and seed realistic data
+        run: |
+          docker compose -f docker-compose.yml -f deploy/compose/sandbox.yml up -d --build
+          for i in $(seq 1 60); do curl -fs "$API/health/ready" && curl -fs -o /dev/null "$WEB" && break; sleep 3; done
+          curl -fs "$API/health/ready"
+          node scripts/seed-demo.mjs "$API"
+
+      # --- OWASP ZAP: authenticated API scan driven by the OpenAPI document ---
+      - name: ZAP API scan
+        uses: zaproxy/action-api-scan@v0.10.0
+        with:
+          target: http://localhost:5080/openapi/v1.json
+          format: openapi
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-api-scan
+          # Authenticate every request with the (public, sandbox-only) operator demo key.
+          cmd_options: >-
+            -a -z "-config replacer.full_list(0).description=auth
+            -config replacer.full_list(0).enabled=true
+            -config replacer.full_list(0).matchtype=REQ_HEADER
+            -config replacer.full_list(0).matchstr=X-Api-Key
+            -config replacer.full_list(0).regex=false
+            -config replacer.full_list(0).replacement=zr_ops_amina_demo_key"
+      - name: Gate — fail on High-risk ZAP alerts
+        if: always()
+        run: |
+          [ -f report_json.json ] || { echo "::warning::ZAP JSON report not found"; exit 0; }
+          high=$(jq '[.site[].alerts[] | select(.riskcode == "3")] | length' report_json.json)
+          jq -r '.site[].alerts[] | "\(.riskdesc)\t\(.name)"' report_json.json | sort | uniq -c | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$high" -gt 0 ]; then echo "::error::$high High-risk ZAP alert(s)"; exit 1; fi
+
+      # --- Burp Suite Dastardly: free Burp Scanner, no licence required ---
+      - name: Burp Suite Dastardly — scan the web app and console
+        run: |
+          docker run --rm --network host --user "$(id -u)" -v "$PWD:$PWD:rw" -w "$PWD" \
+            -e BURP_START_URL="$WEB/" \
+            -e BURP_REPORT_FILE_PATH="$PWD/dastardly-report.xml" \
+            public.ecr.aws/portswigger/dastardly:latest
+
+      - name: Upload DAST reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dast-reports
+          path: |
+            report_*.*
+            dastardly-report.xml
+          if-no-files-found: ignore
+      - name: API logs (for triaging scanner findings)
+        if: failure()
+        run: docker compose logs api | tail -200

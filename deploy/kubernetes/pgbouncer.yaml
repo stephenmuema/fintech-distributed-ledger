@@ -1,0 +1,66 @@
+# PgBouncer in transaction mode between Zirnis and PostgreSQL. Zirnis's driver (pgx) prepares
+# statements, which transaction pooling supports only with max_prepared_statements set
+# (PgBouncer 1.21+); without it, units of work fail. Stateless: two replicas, one down at a time.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+  labels: { app: pgbouncer }
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app: pgbouncer }
+  template:
+    metadata:
+      labels: { app: pgbouncer }
+    spec:
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: pgbouncer } } }
+      containers:
+        - name: pgbouncer
+          image: edoburu/pgbouncer:v1.24.1-p1
+          ports:
+            - { name: pg, containerPort: 5432 }
+          env:
+            - { name: DB_HOST, value: postgres.example.internal } # your PostgreSQL
+            - { name: DB_USER, value: zirnis }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: zirnis, key: ZIRNIS_DB_PASSWORD } }
+            - { name: AUTH_TYPE, value: scram-sha-256 }
+            - { name: POOL_MODE, value: transaction }
+            - { name: MAX_PREPARED_STATEMENTS, value: "200" } # required: see above
+            - { name: MAX_CLIENT_CONN, value: "1000" }
+            # Server connections per replica. Zirnis opens up to 16 writers, 16 readers and a few
+            # for reference blocks per instance; keep replicas × this within max_connections.
+            - { name: DEFAULT_POOL_SIZE, value: "40" }
+          readinessProbe:
+            tcpSocket: { port: pg }
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: pg }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 32Mi }
+            limits: { memory: 128Mi }
+          securityContext: { allowPrivilegeEscalation: false }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pgbouncer
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: { app: pgbouncer }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgbouncer
+spec:
+  selector: { app: pgbouncer }
+  ports:
+    - { name: pg, port: 5432, targetPort: pg }

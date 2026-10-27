@@ -1,0 +1,25 @@
+title = "Zirnis gitleaks configuration"
+
+# Start from gitleaks' built-in rule set.
+[extend]
+useDefault = true
+
+# The only allowlisted values are the public sandbox demo credentials documented in the
+# docs (demo API keys, their SHA-256 hashes and sandbox webhook secrets). They are matched
+# exactly, so a real secret added anywhere — including internal/config — is still reported.
+[allowlist]
+description = "Public sandbox demo credentials"
+regexTarget = "match"
+regexes = [
+  '''zr_(platform|ops_amina|ops_brian)_demo_key''',
+  '''whsec_sandbox_[a-z_]+''',
+  '''6b94a01a54a65f0e85dec37898e6bb0a67ac096ee1277730bb9d1a6287d3a86d''',
+  '''c6c1579376a783760d1d4f529dd5380c679b29e2cb25960879f7062297bdce47''',
+  '''0d8978a9644d355faee84e704074ea1d26275696005122914da6a7e196855fc9''',
+  # Default passwords of the throwaway database containers (deploy/compose, CI services):
+  # local-only, overridden by ZIRNIS_DB_PASSWORD for anything real.
+  '''[Mm]izani-(root-)?local-(only|0nly)''',
+  '''Zirnis-CI-0nly''',
+  # Callback token the integration tests give their in-process fake providers (fakes_test.go).
+  '''cb_test_0123456789abcdef0123456789abcdef''',
+]

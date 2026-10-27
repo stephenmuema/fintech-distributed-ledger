@@ -1,0 +1,25 @@
+# MongoDB 9 as the evidence copy (audit chain, provider calls, callbacks). Combine with any
+# database override; in production point ZIRNIS_MONGODB_URI at MongoDB Atlas instead.
+#   docker compose -f docker-compose.yml -f deploy/compose/postgres.yml -f deploy/compose/mongodb.yml up --build
+services:
+  mongodb:
+    image: mongo:9.0
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  api:
+    environment:
+      ZIRNIS_MONGODB_URI: mongodb://mongodb:27017
+      ZIRNIS_MONGODB_DATABASE: zirnis
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  mongodb-data:
