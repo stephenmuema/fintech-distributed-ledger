@@ -1,6 +1,6 @@
 # zirnis-ext — Zirnis extensions in Python
 
-Write the bank's own rules: classify and match suspense items, veto clearings, pair nostro statements, add Close-of-Business work. You write them in Python, the Zirnis core consults them over signed HTTP, and the core applies their decisions under its own controls. Extensions never post. See [ADR 0011](../../docs/adr/0011-extension-framework.md).
+Write the bank's own rules: classify and match suspense items, veto clearings, pair nostro statements, add Close-of-Business work. You write them in Python, the Zirnis core consults them over signed HTTP, and the core applies their decisions under its own controls. Extensions never post.
 
 The SDK uses only the standard library and needs Python 3.10+.
 
@@ -56,7 +56,7 @@ The field reference is [`pkg/extapi/extapi.go`](../../pkg/extapi/extapi.go). Amo
 
 ## Provider modules (Tieto, Airtel Money, …)
 
-Onboard the provider as a channel first. That opens its outward and inward suspense accounts and a settlement account ([ADR 0014](../../docs/adr/0014-provider-channels.md)). Then write the module:
+Onboard the provider as a channel first. That opens its outward and inward suspense accounts and a settlement account. Then write the module:
 
 ```python
 from zirnis_ext import COMPLETE, HOLD, RETURN, Extension, ExtensionClient, serve

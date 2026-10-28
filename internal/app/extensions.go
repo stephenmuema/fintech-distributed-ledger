@@ -25,7 +25,7 @@ import (
 // Two rules keep extensions safe:
 //   - extensions never post: the core re-validates every decision and applies it itself;
 //   - extensions are never called inside a write transaction: with a single serialised writer
-//     (ADR 0007) a slow extension would stall every posting. Callers consult first, then open
+//     a slow extension would stall every posting. Callers consult first, then open
 //     their unit of work and re-check state.
 type Extensions struct {
 	a      *App

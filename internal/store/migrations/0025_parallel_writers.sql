@@ -1,4 +1,4 @@
--- Parallel writers on the server engines (ADR 0027).
+-- Parallel writers on the server engines.
 --
 -- locks: named row locks a unit of work takes before a check that spans rows ("customer:<id>"
 -- before summing a customer's daily usage, "outflow:<date>" before today's outflow). An UPDATE of

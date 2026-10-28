@@ -13,7 +13,7 @@ import (
 	"github.com/stephenmuema/finnie/internal/store"
 )
 
-// With RabbitMQ (ADR 0031) an event moves through three claims on its outbox row:
+// With RabbitMQ an event moves through three claims on its outbox row:
 //
 //	q:<token>  queued: the relay published it; any copy of the message may take it
 //	c:<token>  a consumer is delivering it

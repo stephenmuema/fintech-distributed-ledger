@@ -25,5 +25,5 @@ Every amount in suspense is an item with an age, an owner and a type. The types 
 5. For drift: correct the cause first. If an item was lost, raise one (`POST /ops/suspense/items`, maker-checker) against the account that received the other side, then resume.
 
 ## Follow up
-- Recurring items of one kind usually mean a missing rule. Add an extension (ADR 0011) to classify or match them, and consider an auto-clear threshold on the type.
+- Recurring items of one kind usually mean a missing rule. Add an extension to classify or match them, and consider an auto-clear threshold on the type.
 - Review types' ageing limits quarterly. A type that always escalates has the wrong limits or no owner.

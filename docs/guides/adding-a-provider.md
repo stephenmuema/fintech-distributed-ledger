@@ -1,6 +1,6 @@
 # Guide — Adding a provider: M-Pesa and Verto
 
-No provider's code lives in Zirnis's core. Every provider is a **module** in [`modules/`](../../modules): its own source, build, image and release ([ADR 0018](../adr/0018-providers-are-modules.md)). When a provider changes its API, you release its module; the core does not change.
+No provider's code lives in Zirnis's core. Every provider is a **module** in [`modules/`](../../modules): its own source, build, image and release. When a provider changes its API, you release its module; the core does not change.
 
 Every provider follows the same pattern:
 
@@ -19,14 +19,6 @@ There are two kinds of module. Pick by what the provider is to the business:
 | Callbacks | to Zirnis (`/webhooks/{provider}/…`), relayed to the module | to the module's own webhook endpoint, which calls Zirnis back |
 | Onboarding | module endpoint (`hooks: ["provider"]`) + provider channel (`provider`, `module`) | channel (`extension`) + module endpoint (`hooks: ["suspense.opened"]`) |
 | Tested with | [`pkg/provtest`](../../pkg/provtest): a real Zirnis core in process | the extension test patterns in `internal/httpapi/channels_test.go` |
-
-Background reading:
-
-- [ADR 0014](../adr/0014-provider-channels.md): channels;
-- [ADR 0015](../adr/0015-built-in-providers-are-channels.md): provider books;
-- [ADR 0018](../adr/0018-providers-are-modules.md): providers are modules;
-- [ADR 0011](../adr/0011-extension-framework.md): extensions;
-- [ADR 0017](../adr/0017-production-safety.md): production safety.
 
 ---
 

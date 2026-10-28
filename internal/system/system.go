@@ -102,7 +102,7 @@ func Build(ctx context.Context, cfg config.Config, clk clock.Clock, logger *slog
 		if err := a.Bootstrap(ctx); err != nil {
 			return err
 		}
-		return st.EnsurePartitions(ctx, clk.Now()) // PostgreSQL, once partitioned (ADR 0029)
+		return st.EnsurePartitions(ctx, clk.Now()) // PostgreSQL, once partitioned
 	})
 	if err != nil {
 		st.Close()

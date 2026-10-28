@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Monthly partitions for the two largest tables on PostgreSQL (ADR 0029): journal lines by
+// Monthly partitions for the two largest tables on PostgreSQL: journal lines by
 // booking date and audit events by the time they occurred. Both are append-only, so an old month
 // never changes and can be detached and archived whole. Every other engine, and a PostgreSQL
 // database not converted with Partition, keeps them as plain tables.

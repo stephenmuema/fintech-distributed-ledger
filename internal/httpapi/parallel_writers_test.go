@@ -17,7 +17,7 @@ import (
 )
 
 // These hold on every engine. On SQLite units of work run one at a time; run them on a server
-// engine (ZIRNIS_TEST_DATASOURCE=postgres …) to exercise parallel writers (ADR 0027).
+// engine (ZIRNIS_TEST_DATASOURCE=postgres …) to exercise parallel writers.
 
 func TestConcurrentPayoutsFromOneCustomersAccountsStayWithinTheDailyLimit(t *testing.T) {
 	h := newHarness(t)
@@ -248,7 +248,7 @@ func TestASplitBookMustNotGoNegativeInTotal(t *testing.T) {
 func TestThePartitionedLedgerAndAuditTrailKeepEveryGuarantee(t *testing.T) {
 	h := newHarness(t)
 	if h.sys.Store.Dialect() != store.Postgres {
-		t.Skip("monthly partitions are PostgreSQL only (ADR 0029)")
+		t.Skip("monthly partitions are PostgreSQL only")
 	}
 	ctx := context.Background()
 	merchant := h.account(h.verifiedCustomer("Business"))

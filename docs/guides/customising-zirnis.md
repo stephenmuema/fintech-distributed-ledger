@@ -6,22 +6,22 @@ This guide is for Zirnis developers and for anyone who has built local developme
 
 | T24 | Zirnis | Where |
 |---|---|---|
-| `FUNDS.TRANSFER` | The transaction record, `FT…` | `POST /transactions`, `GET /transactions/{ref}` — [ADR 0019](../adr/0019-transactions-types-and-versions.md) |
+| `FUNDS.TRANSFER` | The transaction record, `FT…` | `POST /transactions`, `GET /transactions/{ref}` |
 | `FT.TXN.TYPE.CONDITION` | Transaction type: the flow it runs, reporting class, limits | `POST /ops/transaction-types/{code}` |
 | `VERSION` | Version: the screen for one use case | `POST /ops/versions/{name}`, `GET /versions` |
-| VERSION input routine | Input routine: hook `transaction.validate` | an extension ([ADR 0011](../adr/0011-extension-framework.md)) |
+| VERSION input routine | Input routine: hook `transaction.validate` | an extension |
 | VERSION authorisation routine | Authorisation routine: hook `transaction.authorise` | an extension |
 | `OVERRIDE` / `OVERRIDE.CLASS` | Overrides, and each version's class for them: accept, checker, refuse, ignore | the version's `overrides` |
-| `LOCAL.TABLE`, `LOCAL.REF` | Local reference tables: real columns | `lt_customer`, `lt_account`, `lt_transaction` — [ADR 0020](../adr/0020-local-tables-physical-columns.md) |
+| `LOCAL.TABLE`, `LOCAL.REF` | Local reference tables: real columns | `lt_customer`, `lt_account`, `lt_transaction` |
 | `FT_LOCAL` (the warehouse) | `lt_transaction` | one row per transaction |
 | `FT_PAYMENT_DETAILS` | `paymentDetails` on the record, plus `pd_<provider>` for what a provider returns | declared by the provider's module |
 | Local application (custom table) | Local application `la_<name>` | `POST /ops/local-tables/{NAME}` with `kind: application` |
 | `CHECKFILE` | A lookup field naming a local application | field type `lookup` |
-| `ENQUIRY` | Enquiry | `POST /ops/enquiries/{name}` — [ADR 0021](../adr/0021-enquiries.md) |
+| `ENQUIRY` | Enquiry | `POST /ops/enquiries/{name}` |
 | INAU / `RECORD.STATUS` | `recordStatus` INAU, LIVE or RJCT; a different operator authorises | everything above |
 | `$HIS` | Record history | `GET /ops/history/{Entity}/{id}` |
 | Local batch job | COB job: hook `cob.job` | an extension |
-| Interface / TPH | Provider module | `modules/` — [ADR 0018](../adr/0018-providers-are-modules.md) |
+| Interface / TPH | Provider module | `modules/` |
 
 Every definition (type, version, local table, local record, enquiry, module endpoint, channel) is input by a maker and takes effect only when a different operator authorises it. In the console these all live under **Transaction setup**, **Local tables** and **Enquiries**, with an "Awaiting authorisation" panel on each.
 

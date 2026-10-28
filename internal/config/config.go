@@ -51,18 +51,18 @@ type Config struct {
 	// DBMaxReadConns sizes the read pool on the server engines.
 	DBMaxReadConns int `json:"dbMaxReadConns"`
 	// DBMaxWriteConns sizes the writer pool on the server engines: how many units of work run in
-	// parallel (ADR 0027). 1 runs them one at a time, as SQLite always does.
+	// parallel. 1 runs them one at a time, as SQLite always does.
 	DBMaxWriteConns int `json:"dbMaxWriteConns"`
 	// AuditChains is how many hash chains the audit trail spreads over on the server engines.
 	AuditChains int `json:"auditChains"`
 	// RedisURL (optional) shares rate limits between instances, e.g. redis://redis:6379/0. Without
 	// it, or while it doesn't answer, each instance counts on its own.
 	RedisURL string `json:"-"`
-	// RabbitMQURL (optional) carries outbox events through RabbitMQ (ADR 0031), e.g.
+	// RabbitMQURL (optional) carries outbox events through RabbitMQ, e.g.
 	// amqp://zirnis:…@rabbitmq:5672/. Without it each instance delivers webhooks from the outbox.
 	RabbitMQURL string `json:"-"`
-	// LedgerParts is how many parts a busy shared account is split into on the server engines
-	// (ADR 0028). 1 keeps every account whole.
+	// LedgerParts is how many parts a busy shared account is split into on the server
+	// engines. 1 keeps every account whole.
 	LedgerParts int `json:"ledgerParts"`
 	// MongoDB (e.g. Atlas) receives a copy of the evidence — audit chain, provider calls and
 	// callbacks — for search and retention. Empty URI disables it.
@@ -109,7 +109,7 @@ type Config struct {
 	ProviderTimeout    time.Duration `json:"-"`
 	ProviderRetryDelay time.Duration `json:"-"`
 
-	// Providers are modules (modules/, ADR 0018): their credentials and callback secrets live in
+	// Providers are modules (modules/): their credentials and callback secrets live in
 	// each module's environment, never here.
 	StaleAfter time.Duration `json:"-"` // collections without a callback this long are status-queried
 

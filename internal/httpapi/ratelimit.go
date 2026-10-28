@@ -16,7 +16,7 @@ type limiter interface {
 }
 
 // newLimiter is the limiter for one set of routes: shared by every instance through Redis when
-// ZIRNIS_REDIS_URL is set (ADR 0030), counted by this instance alone otherwise.
+// ZIRNIS_REDIS_URL is set, counted by this instance alone otherwise.
 func (s *Server) newLimiter(name string, limit int) limiter {
 	local := newFixedWindow(limit)
 	if s.redis == nil {

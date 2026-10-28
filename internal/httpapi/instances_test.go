@@ -11,7 +11,7 @@ import (
 	"github.com/stephenmuema/finnie/pkg/provapi"
 )
 
-// Several instances of Zirnis on one database (ADR 0030). They need a server engine
+// Several instances of Zirnis on one database. They need a server engine
 // (ZIRNIS_TEST_DATASOURCE=postgres …): one process owns a SQLite file.
 
 // anotherInstance starts a second Zirnis on h's database.

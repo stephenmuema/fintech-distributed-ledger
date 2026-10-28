@@ -2,7 +2,7 @@
 // the unit of work (Tx) that every state change goes through. It runs on SQLite (the default),
 // PostgreSQL, MySQL or SQL Server — see Dialect for how one portable SQL is adapted to each.
 //
-// Concurrency model (ADR 0027). On SQLite, and on any engine with one writer connection, units
+// Concurrency model. On SQLite, and on any engine with one writer connection, units
 // of work run one at a time (BEGIN IMMEDIATE on SQLite). On the server engines they run in
 // parallel at READ COMMITTED, from a pool of writer connections:
 //   - version-checked UPDATEs and unique constraints catch conflicting writes, and a conflict

@@ -10,7 +10,7 @@ The API runs on any of five relational databases, and can optionally copy its ev
 
 ## Run it with Docker
 
-The base file is production-safe: `ZIRNIS_ENV=Production` on PostgreSQL 18, with no simulated providers, demo keys, demo operators or `/sandbox` endpoints ([ADR 0017](adr/0017-production-safety.md)). The demo is an explicit override.
+The base file is production-safe: `ZIRNIS_ENV=Production` on PostgreSQL 18, with no simulated providers, demo keys, demo operators or `/sandbox` endpoints. The demo is an explicit override.
 
 ```bash
 cp .env.example .env            # set ZIRNIS_DB_PASSWORD and ZIRNIS_BOOTSTRAP_ADMIN[_PASSWORD]
@@ -51,18 +51,18 @@ Run only the API and web images, and set the datasource in `.env` or your platfo
 
 Other settings:
 - **Evidence copy:** `ZIRNIS_MONGODB_URI` (e.g. `mongodb+srv://…mongodb.net/`) and `ZIRNIS_MONGODB_DATABASE`. Collections `audit_events`, `provider_calls` and `inbound_callbacks` are created with their indexes.
-- **Connections:** `ZIRNIS_DB_MAX_WRITE_CONNS` (default 16) sizes the writer pool, which is how many units of work run in parallel ([ADR 0027](adr/0027-parallel-writers.md)); `ZIRNIS_DB_MAX_READ_CONNS` (default 16) sizes the read pool. Connections are recycled every 30 minutes, which suits managed databases and proxies. With several instances, put PgBouncer in front ([deploy/kubernetes](../deploy/kubernetes/README.md#pgbouncer)).
-- **Events through RabbitMQ (optional):** `ZIRNIS_RABBITMQ_URL` (e.g. `amqp://zirnis:…@rabbitmq:5672/`). Outbox events go to the topic exchange `zirnis.events`, routed by type; webhook delivery reads the quorum queue `zirnis.webhooks`, and other services can bind their own queues. Events wait in the outbox while RabbitMQ is down ([ADR 0031](adr/0031-rabbitmq-event-delivery.md)). `deploy/compose/rabbitmq.yml` runs one locally.
+- **Connections:** `ZIRNIS_DB_MAX_WRITE_CONNS` (default 16) sizes the writer pool, which is how many units of work run in parallel; `ZIRNIS_DB_MAX_READ_CONNS` (default 16) sizes the read pool. Connections are recycled every 30 minutes, which suits managed databases and proxies. With several instances, put PgBouncer in front ([deploy/kubernetes](../deploy/kubernetes/README.md#pgbouncer)).
+- **Events through RabbitMQ (optional):** `ZIRNIS_RABBITMQ_URL` (e.g. `amqp://zirnis:…@rabbitmq:5672/`). Outbox events go to the topic exchange `zirnis.events`, routed by type; webhook delivery reads the quorum queue `zirnis.webhooks`, and other services can bind their own queues. Events wait in the outbox while RabbitMQ is down. `deploy/compose/rabbitmq.yml` runs one locally.
 - **Money controls:** `ZIRNIS_FX_MAX_RATE_AGE` (default `24h`: FX quotes are refused on an older treasury rate), `ZIRNIS_DAILY_OUTFLOW_LIMIT` (major units of the local currency; beyond it payouts wait for review), and `allowedCidrs` on each API key in `ZIRNIS_CONFIG`.
 - **Runtime:** `ZIRNIS_ENV=Production` (no sandbox, simulators, demo keys or demo operators), real API keys (hashes only) via `ZIRNIS_CONFIG`, real webhook secrets via `ZIRNIS_CONFIG` (the public sandbox ones are dropped), the first console administrator via `ZIRNIS_BOOTSTRAP_ADMIN` / `ZIRNIS_BOOTSTRAP_ADMIN_PASSWORD` (or the one-time password logged at first start), `ZIRNIS_PUBLIC_URL`, one shared secret per provider module (`ZIRNIS_MODULE_<MODULE>_SECRET`). Providers' credentials go in each module's own environment, never Zirnis's: run the modules with `docker compose --profile providers up` and onboard them as described in [integrations.md](integrations.md).
-- **Automation** ([ADR 0010](adr/0010-straight-through-processing.md)):
+- **Automation:**
   - `ZIRNIS_AUTO_COB_AT` runs Close of Business nightly. COB pays standing orders, loses disputes past their evidence deadline, and reconciles and settles provider reports.
   - `ZIRNIS_SETTLEMENT_INBOX` is the directory providers' reports are delivered to by SFTP or bucket sync, named `<provider>_<YYYYMMDD>.csv`. It is created at startup, and compose uses `/data/settlements`. On several instances, mount it only where the workers run.
   - `ZIRNIS_PAYOUT_REVIEW_COOL_OFF` (default `1h`, `0` to disable) sets how often held payouts are re-scored.
 
 ### Payment links and the payer edge
 
-The console (8080) and the API (5080) are for the internal network only. Payers open payment links from anywhere, so one port is published to the internet: the web container's **8081**, the payer edge ([ADR 0022](adr/0022-payer-edge.md)).
+The console (8080) and the API (5080) are for the internal network only. Payers open payment links from anywhere, so one port is published to the internet: the web container's **8081**, the payer edge.
 
 1. **Publish it behind TLS.** Put 8081 behind your load balancer or ingress at a public https name, for example `https://pay.example.com`. Publish nothing else.
 2. **Set `ZIRNIS_PUBLIC_URL`** to that address, for both the API and the provider modules (compose passes it to both).
@@ -89,7 +89,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://pay.example.com/api/customers  
   - `GET /health/ready` is readiness: it checks the database and reports *Degraded* while a provider circuit is open.
   - The image's `HEALTHCHECK` runs `zirnis healthcheck`.
 - **Migrations** run at startup inside transactions (MySQL commits DDL implicitly). Roll out a new version to one instance first.
-- **Local tables** ([ADR 0020](adr/0020-local-tables-physical-columns.md)) add columns at runtime, when an operator's definition is authorised. The database account therefore needs rights to create and alter tables and indexes in its own schema. Where DBAs own the schema, set `ZIRNIS_LOCAL_DDL=manual`: Zirnis then only shows the translated SQL (`GET /ops/local-tables/{name}/ddl`, or **Local tables** in the console), and `POST /ops/local-tables/{name}/apply` picks up what the DBA ran. Until then the new fields refuse input (`local_field_pending`); nothing else is affected.
+- **Local tables** add columns at runtime, when an operator's definition is authorised. The database account therefore needs rights to create and alter tables and indexes in its own schema. Where DBAs own the schema, set `ZIRNIS_LOCAL_DDL=manual`: Zirnis then only shows the translated SQL (`GET /ops/local-tables/{name}/ddl`, or **Local tables** in the console), and `POST /ops/local-tables/{name}/apply` picks up what the DBA ran. Until then the new fields refuse input (`local_field_pending`); nothing else is affected.
 
 ## Verifying an engine
 
@@ -102,4 +102,4 @@ ZIRNIS_TEST_MONGODB_URI='mongodb://localhost:27017' \
 go test ./internal/httpapi/...
 ```
 
-The account must be able to create databases (Oracle: users). CI's **Databases** workflow does this for PostgreSQL, MySQL, SQL Server and Oracle (and MongoDB) whenever persistence code changes, weekly, and on demand. See [ADR 0009](adr/0009-portable-sql-and-evidence-copy.md) for how one SQL runs on all five engines.
+The account must be able to create databases (Oracle: users).

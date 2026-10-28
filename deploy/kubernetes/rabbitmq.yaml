@@ -1,5 +1,5 @@
-# RabbitMQ carries outbox events from the API to webhook delivery and to any other subscriber
-# (ADR 0031). One node with a persistent volume, so queued messages survive a restart. The outbox
+# RabbitMQ carries outbox events from the API to webhook delivery and to any other subscriber.
+# One node with a persistent volume, so queued messages survive a restart. The outbox
 # stays the source of truth: if RabbitMQ is down or loses messages, events wait there and are
 # published again. For a highly available broker, run three nodes with the RabbitMQ Cluster
 # Operator instead (the webhook queue is a quorum queue) and point ZIRNIS_RABBITMQ_URL at it.

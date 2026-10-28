@@ -1,4 +1,4 @@
-# Redis for rate limits shared by every API instance (ADR 0030). A cache only: nothing is
+# Redis for rate limits shared by every API instance. A cache only: nothing is
 # persisted, and if it's down each instance counts its own requests until it's back.
 apiVersion: apps/v1
 kind: Deployment

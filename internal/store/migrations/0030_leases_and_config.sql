@@ -1,4 +1,4 @@
--- Several instances (ADR 0030).
+-- Several instances.
 --
 -- job_leases: a job only one instance should run (scheduled COB, the operations sweeps) runs on
 -- the instance holding its lease, renewed while it runs; another takes it over once it expires.

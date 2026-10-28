@@ -1,6 +1,6 @@
-# RabbitMQ carries outbox events from the API to webhook delivery and to any other subscriber
-# (ADR 0031). Optional: without it each API instance delivers webhooks straight from the outbox.
-# The outbox stays the source of truth, so nothing is lost if RabbitMQ is: events wait there.
+# RabbitMQ carries outbox events from the API to webhook delivery and to any other subscriber.
+# Optional: without it each API instance delivers webhooks straight from the outbox.
+# The outbox stays the source of truth, so nothing is lost if RabbitMQ is down: events wait there.
 #
 #   docker compose -f docker-compose.yml -f deploy/compose/rabbitmq.yml up -d --build
 #

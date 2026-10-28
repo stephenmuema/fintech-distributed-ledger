@@ -1,4 +1,4 @@
--- The onboarding policy (ADR 0023): how customers sign up, one record amended by administrators
+-- The onboarding policy: how customers sign up, one record amended by administrators
 -- under maker-checker. Until one is authorised, KYC is required.
 CREATE TABLE onboarding_policies (
     id           TEXT PRIMARY KEY,

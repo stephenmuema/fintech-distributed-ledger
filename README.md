@@ -26,7 +26,7 @@ docker compose -f docker-compose.yml -f deploy/compose/sandbox.yml up --build
 | API reference | http://localhost:5080/docs |
 | Payer edge (payment links) | http://localhost:8081/checkout/{code} |
 
-The sandbox uses simulated providers, demo API keys and demo operators. Without the sandbox file, `docker compose up --build` is production-safe: PostgreSQL, nothing simulated, and a bootstrap administrator from `.env` ([ADR 0017](docs/adr/0017-production-safety.md)). [docs/deployment.md](docs/deployment.md) covers every engine, setting and production concern.
+The sandbox uses simulated providers, demo API keys and demo operators. Without the sandbox file, `docker compose up --build` is production-safe: PostgreSQL, nothing simulated, and a bootstrap administrator from `.env`. [docs/deployment.md](docs/deployment.md) covers every engine, setting and production concern.
 
 **Demo API keys** (sandbox only):
 
@@ -58,7 +58,7 @@ cd web && npm install && npm run dev   # console on http://localhost:5173, proxy
 
 ## How it's built
 
-**One posting engine moves all money.** Every feature posts a balanced journal entry through `Ledger.Post`, in the same database transaction as its business change: collections, payouts, FX, cards, interest, settlement and suspense clearings. Nothing else touches a balance. Customer accounts can't go negative, and entries are never changed: corrections are new, compensating entries. COB re-derives every balance from the journal and halts on any difference ([ADR 0001](docs/adr/0001-double-entry-ledger.md)).
+**One posting engine moves all money.** Every feature posts a balanced journal entry through `Ledger.Post`, in the same database transaction as its business change: collections, payouts, FX, cards, interest, settlement and suspense clearings. Nothing else touches a balance. Customer accounts can't go negative, and entries are never changed: corrections are new, compensating entries. COB re-derives every balance from the journal and halts on any difference.
 
 A KES 1,000.00 card payment with the 2.90% card collection charge passes through the acquirer's inward book:
 
@@ -86,27 +86,27 @@ A KES 1,000.00 card payment with the 2.90% card collection charge passes through
 | `cmd/loadtest` | Seeding, throughput steps and the failure run |
 
 **Guarantees worth knowing:**
-- **Idempotency at every layer:** API requests, postings, provider calls, inbound callbacks and state transitions ([ADR 0002](docs/adr/0002-idempotency-at-every-layer.md)).
+- **Idempotency at every layer:** API requests, postings, provider calls, inbound callbacks and state transitions.
 - **No money is lost when a provider fails.**
   - A provider is called outside any database transaction. Payments fail over only when a provider certainly didn't act, never after a hard decline.
-  - Every request is recorded before it goes out. A payment whose answer was lost is asked about again with the same idempotency key, or handed to operations ([ADR 0003](docs/adr/0003-provider-orchestration-and-resilience.md)).
-- **Tamper-evident evidence:** an append-only, hash-chained audit trail seals every journal entry, and `GET /ops/audit/verify` re-checks it. Provider calls and callbacks are kept as well ([ADR 0008](docs/adr/0008-validation-and-audit-trail.md)).
-- **Maker-checker** for parameter changes, manual postings and suspense clearings ([ADR 0016](docs/adr/0016-operator-sign-in-and-permissions.md)).
+  - Every request is recorded before it goes out. A payment whose answer was lost is asked about again with the same idempotency key, or handed to operations.
+- **Tamper-evident evidence:** an append-only, hash-chained audit trail seals every journal entry, and `GET /ops/audit/verify` re-checks it. Provider calls and callbacks are kept as well.
+- **Maker-checker** for parameter changes, manual postings and suspense clearings.
 
 ## Scale
 
 - **Parallel writers within an instance.** On the server engines, units of work run in parallel:
   - version checks and named locks keep the rules that span rows;
-  - busy system accounts are written at commit ([ADR 0027](docs/adr/0027-parallel-writers.md)) and split into parts ([ADR 0028](docs/adr/0028-split-accounts.md)).
-- **Several instances on one database** ([ADR 0030](docs/adr/0030-several-instances.md)):
+  - busy system accounts are written at commit and split into parts.
+- **Several instances on one database:**
   - close of business waits for every live instance;
   - singleton jobs run under leases;
   - webhooks are claimed;
   - authorised changes reach every instance;
   - rate limits are shared through Redis, which is optional.
-- **Events through RabbitMQ (optional).** Outbox events are published to a topic exchange; consumers on every instance deliver the webhooks, and other services can bind their own queues. The outbox stays the source of truth, so nothing is lost if RabbitMQ is ([ADR 0031](docs/adr/0031-rabbitmq-event-delivery.md)).
+- **Events through RabbitMQ (optional).** Outbox events are published to a topic exchange; consumers on every instance deliver the webhooks, and other services can bind their own queues. The outbox stays the source of truth, so nothing is lost if RabbitMQ drops a message.
 - **Kubernetes:** [deploy/kubernetes](deploy/kubernetes/README.md) runs the API at 3 to 10 replicas behind an autoscaler, with PgBouncer, Redis, RabbitMQ, draining shutdowns and migrations in an init container.
-- **Monthly partitions** for the journal and the audit trail on PostgreSQL, switched on with `zirnis partition` ([ADR 0029](docs/adr/0029-monthly-partitions.md)).
+- **Monthly partitions** for the journal and the audit trail on PostgreSQL, switched on with `zirnis partition`.
 
 [docs/runbooks/load-testing.md](docs/runbooks/load-testing.md) has the load test: a throughput ceiling, and a failure run that takes providers down while checking that the books stay whole.
 
@@ -125,18 +125,8 @@ ZIRNIS_TEST_DATABASE_URL='postgres://zirnis:…@localhost:5433/postgres?sslmode=
 - **On a server engine** they also exercise parallel writers and several instances on one database.
 - **They run in parallel, each on its own copy of a database** migrated and bootstrapped once per configuration (a file copy on SQLite, `CREATE DATABASE … TEMPLATE` on PostgreSQL). The suite takes about 25 seconds on SQLite and 2 minutes on PostgreSQL. MySQL, SQL Server and Oracle build each test's database from scratch, so they're slower.
 - **Redis and RabbitMQ.** `ZIRNIS_TEST_REDIS_URL` adds the shared rate-limit test; `ZIRNIS_TEST_RABBITMQ_URL` adds the event delivery tests.
-- **In CI:** SQLite on every push; MySQL, SQL Server and Oracle in [databases.yml](.github/workflows/databases.yml); security scans in [security.yml](.github/workflows/security.yml).
 
 ## Documentation
 
 - **Operating it:** [deployment](docs/deployment.md), [Kubernetes](deploy/kubernetes/README.md), [integrations and provider onboarding](docs/integrations.md), [security](docs/security.md), and the [runbooks](docs/runbooks/README.md): COB halted, stuck payouts, provider outages, reconciliation and nostro breaks, suspense ageing, dead-lettered webhooks, backup and restore, load testing.
 - **Extending it:** [adding a provider](docs/guides/adding-a-provider.md), [customising Zirnis](docs/guides/customising-zirnis.md) (local tables, enquiries, transaction types, extensions), [provider modules](modules/README.md), and the extension SDKs for [Go](sdk/go/README.md) and [Python](sdk/python/README.md).
-- **Decisions** ([docs/adr](docs/adr)):
-
-| | |
-|---|---|
-| **Ledger and money** | [0001](docs/adr/0001-double-entry-ledger.md) double-entry ledger · [0002](docs/adr/0002-idempotency-at-every-layer.md) idempotency · [0004](docs/adr/0004-transactional-outbox.md) outbox · [0012](docs/adr/0012-suspense-sub-ledger.md) suspense · [0013](docs/adr/0013-nostro-vostro.md) nostro and vostro · [0019](docs/adr/0019-transactions-types-and-versions.md) transactions, types and versions · [0025](docs/adr/0025-sub-accounts-and-own-transfers.md) sub-accounts |
-| **Core banking** | [0005](docs/adr/0005-t24-style-core-banking.md) T24-style dates, COB and maker-checker · [0006](docs/adr/0006-modular-monolith.md) modular monolith · [0010](docs/adr/0010-straight-through-processing.md) straight-through processing · [0020](docs/adr/0020-local-tables-physical-columns.md) local tables · [0021](docs/adr/0021-enquiries.md) enquiries · [0024](docs/adr/0024-change-log-and-customer-changes.md) change log |
-| **Providers** | [0003](docs/adr/0003-provider-orchestration-and-resilience.md) orchestration and resilience · [0014](docs/adr/0014-provider-channels.md) provider channels · [0015](docs/adr/0015-built-in-providers-are-channels.md) built-in providers · [0018](docs/adr/0018-providers-are-modules.md) providers are modules · [0022](docs/adr/0022-payer-edge.md) payer edge |
-| **Customers and controls** | [0008](docs/adr/0008-validation-and-audit-trail.md) validation and audit · [0011](docs/adr/0011-extension-framework.md) extensions · [0016](docs/adr/0016-operator-sign-in-and-permissions.md) operators and permissions · [0017](docs/adr/0017-production-safety.md) production safety · [0023](docs/adr/0023-customer-onboarding.md) onboarding · [0026](docs/adr/0026-business-intelligence-and-the-analyst-permission.md) business intelligence |
-| **Storage and scale** | [0007](docs/adr/0007-go-and-single-writer-sqlite.md) Go and SQLite · [0009](docs/adr/0009-portable-sql-and-evidence-copy.md) five engines and the evidence copy · [0027](docs/adr/0027-parallel-writers.md) parallel writers · [0028](docs/adr/0028-split-accounts.md) split accounts · [0029](docs/adr/0029-monthly-partitions.md) monthly partitions · [0030](docs/adr/0030-several-instances.md) several instances · [0031](docs/adr/0031-rabbitmq-event-delivery.md) RabbitMQ |

@@ -54,8 +54,8 @@ type Options struct {
 	// ManualLocalDDL: local table DDL is shown for a DBA to run instead of being run by Zirnis,
 	// which then only probes for it (ZIRNIS_LOCAL_DDL=manual).
 	ManualLocalDDL bool
-	// LedgerParts is how many parts a busy shared account is split into on the server engines
-	// (ADR 0028); 1 keeps every account whole.
+	// LedgerParts is how many parts a busy shared account is split into on the server
+	// engines; 1 keeps every account whole.
 	LedgerParts int
 }
 
@@ -83,7 +83,7 @@ type App struct {
 	// sending it requests while it finishes the ones in flight.
 	Draining atomic.Bool
 	// Instance names this process among the instances sharing the database: it holds leases and
-	// acknowledges close of business under this name (ADR 0030).
+	// acknowledges close of business under this name.
 	Instance string
 	// configVersion is the configuration version this instance last loaded (ReloadIfChanged).
 	configVersion atomic.Int64

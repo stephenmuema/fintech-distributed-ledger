@@ -10,7 +10,7 @@ Payout states: `PendingReview → Queued → Processing → Paid`, with exits to
 
 ## Assess and act
 
-Every rail is a channel ([ADR 0015](../adr/0015-built-in-providers-are-channels.md)). A payout's funds wait in `payouts-in-transit` (GL 2200) until a rail is tried, then in that rail's outward book (`MPESAOUT`, `KCBOUT`, `EQUITYOUT`, `PESALINKOUT`; GL 2530) until the rail answers. **Console → Provider channels** shows what each rail holds and how long it has held it.
+Every rail is a channel. A payout's funds wait in `payouts-in-transit` (GL 2200) until a rail is tried, then in that rail's outward book (`MPESAOUT`, `KCBOUT`, `EQUITYOUT`, `PESALINKOUT`; GL 2530) until the rail answers. **Console → Provider channels** shows what each rail holds and how long it has held it.
 
 **Queued**
 - Funds are already reserved (in transit, or in a rail's book), so customers cannot double-spend them.

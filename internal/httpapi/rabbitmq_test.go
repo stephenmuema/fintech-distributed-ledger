@@ -19,7 +19,7 @@ import (
 	"github.com/stephenmuema/finnie/internal/workers"
 )
 
-// Outbox events through RabbitMQ (ADR 0031). These need a broker:
+// Outbox events through RabbitMQ. These need a broker:
 // ZIRNIS_TEST_RABBITMQ_URL=amqp://user:pass@localhost:5672/ …
 
 // rabbitMQ returns a fresh exchange and queue on the test broker, deleted after the test.

@@ -29,5 +29,5 @@ Read the proof top to bottom:
 5. **Opening break:** investigate the cut-over history. Once explained, raise a suspense item against the nostro, worked like any other, and note it on the nostro.
 
 ## Follow up
-- A correspondent that consistently reports in a way the core cannot pair (bulk credits, references in the narrative) needs a `nostro.match` extension (ADR 0011). Add it to the nostro's extensions.
+- A correspondent that consistently reports in a way the core cannot pair (bulk credits, references in the narrative) needs a `nostro.match` extension. Add it to the nostro's extensions.
 - Set `proofPolicy: HaltCob` on nostros that carry customer money once their reconciliation is routine.

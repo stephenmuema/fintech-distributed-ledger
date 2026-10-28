@@ -1,6 +1,6 @@
 # Provider integrations
 
-No provider's code is in Zirnis. Every provider is a **module**: a small service in [`modules/`](../modules), with its own source, build, image and release. It speaks the provider protocol ([`pkg/provapi`](../pkg/provapi), [ADR 0018](adr/0018-providers-are-modules.md)). A provider changing its API means a module release, never a core release.
+No provider's code is in Zirnis. Every provider is a **module**: a small service in [`modules/`](../modules), with its own source, build, image and release. It speaks the provider protocol ([`pkg/provapi`](../pkg/provapi)). A provider changing its API means a module release, never a core release.
 
 | Module | Providers it serves | Capabilities |
 |---|---|---|

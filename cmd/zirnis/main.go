@@ -35,7 +35,7 @@ func main() {
 		return
 	}
 	// `zirnis partition` converts the journal lines and the audit trail to monthly partitions:
-	// PostgreSQL only, once, with the API stopped (ADR 0029).
+	// PostgreSQL only, once, with the API stopped.
 	if len(os.Args) > 1 && os.Args[1] == "partition" {
 		if err := partition(logger); err != nil {
 			logger.Error("partitioning failed; nothing changed", "error", err)

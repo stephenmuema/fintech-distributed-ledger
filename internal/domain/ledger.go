@@ -53,7 +53,7 @@ type LedgerAccount struct {
 	Balance  int64  `db:"balance" json:"balance"`
 	// AllowNegative: customer funds must never go negative; system/clearing accounts may.
 	AllowNegative bool `db:"allow_negative" json:"allowNegative"`
-	// ParentID is set on a part of a split account (ADR 0028): a full account in the same
+	// ParentID is set on a part of a split account: a full account in the same
 	// category, GL line and currency. The account's balance is the sum over it and its parts.
 	ParentID  *uuid.UUID `db:"parent_id" json:"parentId,omitempty"`
 	CreatedAt time.Time  `db:"created_at" json:"createdAt"`

@@ -206,7 +206,7 @@ func (s *Suspense) account(tx *store.Tx, t *domain.SuspenseType, currency string
 	if !t.Supports(currency) {
 		return nil, domain.Rule("currency_not_supported", "Suspense type %s does not take %s.", t.Code, currency)
 	}
-	acct, err := store.Get[domain.LedgerAccount](tx, accountColumns+" WHERE category = ? AND currency = ? AND parent_id IS NULL", t.Category, currency) // not a part (ADR 0028)
+	acct, err := store.Get[domain.LedgerAccount](tx, accountColumns+" WHERE category = ? AND currency = ? AND parent_id IS NULL", t.Category, currency) // not a part
 	if err != nil {
 		return nil, err
 	}
@@ -1127,7 +1127,7 @@ type SuspenseDrift struct {
 }
 
 // Integrity checks the sub-ledger invariant on every suspense account. A split account's items
-// belong to the account, and its balance is the total over its parts (ADR 0028).
+// belong to the account, and its balance is the total over its parts.
 func (s *Suspense) Integrity(ctx context.Context) ([]SuspenseDrift, error) {
 	return store.Select[SuspenseDrift](s.a.read(ctx), `SELECT t.code AS type, a.account_number, a.currency, g.balance,
 	        COALESCE((SELECT SUM(i.open_amount) FROM suspense_items i WHERE i.account_id = a.id AND i.status IN (?, ?)), 0) AS open_items

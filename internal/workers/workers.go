@@ -29,7 +29,7 @@ type Options struct {
 	Location  *time.Location
 	// StaleAfter: collections without a callback this long are confirmed by status query.
 	StaleAfter time.Duration
-	// RabbitMQURL (optional) carries outbox events through RabbitMQ (ADR 0031); without it each
+	// RabbitMQURL (optional) carries outbox events through RabbitMQ; without it each
 	// instance delivers webhooks straight from the outbox.
 	RabbitMQURL string
 }
@@ -40,8 +40,8 @@ const consumers = 8
 // Start runs the workers until ctx ends. wait returns once each has finished the cycle it was in,
 // so the process can close the database after them.
 //
-// With several instances (ADR 0030), outbox delivery runs on each (a dispatcher claims what it
-// delivers; with RabbitMQ, a relay publishes and consumers deliver, ADR 0031) and so does
+// With several instances, outbox delivery runs on each (a dispatcher claims what it
+// delivers; with RabbitMQ, a relay publishes and consumers deliver) and so does
 // reloading changed parameters; every other job runs on the instance
 // holding its lease, one at a time.
 func Start(ctx context.Context, a *app.App, st *store.Store, o Options, logger *slog.Logger) (wait func()) {
@@ -95,7 +95,7 @@ func Start(ctx context.Context, a *app.App, st *store.Store, o Options, logger *
 	if o.AutoCobAt != "" {
 		leased("cob-schedule", time.Minute, func() { scheduledCob(jobContext(ctx, "cob"), a, o, logger) })
 	}
-	// Monthly partitions stay ahead of the clock and the business date (PostgreSQL, ADR 0029).
+	// Monthly partitions stay ahead of the clock and the business date (PostgreSQL).
 	leased("partitions", time.Hour, func() {
 		if err := st.EnsurePartitions(ctx, a.Clock.Now()); err != nil {
 			logger.Error("partition upkeep failed", "error", err)
@@ -108,7 +108,7 @@ func Start(ctx context.Context, a *app.App, st *store.Store, o Options, logger *
 }
 
 // Instance keeps this instance registered among those sharing the database, and acknowledges
-// close of business, until ctx ends (ADR 0030). It runs whether or not the workers do: an
+// close of business, until ctx ends. It runs whether or not the workers do: an
 // instance taking requests books to the business date.
 func Instance(ctx context.Context, a *app.App, logger *slog.Logger) (wait func()) {
 	var wg sync.WaitGroup

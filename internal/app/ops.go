@@ -57,7 +57,7 @@ func (o *Ops) VerifyAudit(ctx context.Context) (*AuditVerification, error) {
 	result := &AuditVerification{Valid: true, LedgerMismatches: []string{}}
 	sealed := map[string]string{} // journal entry id → entry hash sealed in the chain
 	const page = 1000
-	// Each chain is walked from its genesis to its recorded head (ADR 0027): an edited, inserted
+	// Each chain is walked from its genesis to its recorded head: an edited, inserted
 	// or removed event breaks the links, and a truncated tail no longer reaches the head.
 	chains, err := store.Select[struct {
 		Chain    int    `db:"chain"`
@@ -346,7 +346,7 @@ func (a *App) Reload(ctx context.Context) error {
 const configVersionName = "parameters"
 
 // configChanged bumps the configuration version in the unit of work that authorises a change, so
-// every instance reloads (ReloadIfChanged), not only the one that authorised it (ADR 0030).
+// every instance reloads (ReloadIfChanged), not only the one that authorised it.
 func configChanged(tx *store.Tx) error {
 	res, err := tx.Exec("UPDATE config_versions SET version = version + 1 WHERE name = ?", configVersionName)
 	if err != nil {

@@ -13,4 +13,4 @@ Implement any of these interfaces:
 - `StatementMatcher`
 - `CobRunner`
 
-`extapi.Implements(ext)` reports which hooks a value serves. See [ADR 0011](../../docs/adr/0011-extension-framework.md) for the rules: extensions never post, and they are never called inside a write transaction.
+`extapi.Implements(ext)` reports which hooks a value serves. The rules: extensions never post, and they are never called inside a write transaction.

@@ -88,11 +88,11 @@ All three work in the sandbox only.
 
 ## Reading the results
 
-- **Throughput.** On the server engines, units of work run in parallel ([ADR 0027](../adr/0027-parallel-writers.md)); SQLite runs them one at a time.
+- **Throughput.** On the server engines, units of work run in parallel; SQLite runs them one at a time.
 
   | Docker Desktop on a 12-core laptop, PostgreSQL, `mix` | 4 clients | 8 | 16 | 64 |
   |---|---|---|---|---|
-  | One writer (before ADR 0027) | ~30 tx/s | | | |
+  | One writer | ~30 tx/s | | | |
   | 16 writers | 65 tx/s | 55 | 36–54 | 59 |
 
   With parallel writers, the laptop's CPU is the limit: PostgreSQL uses about 7 of 12 cores, the API about 3, and the load test the rest. Each request makes many small queries (the transaction record, its flow record, the local-table catalog, history, the change log). A server with its own cores, local NVMe and tuned PostgreSQL will do several times better.

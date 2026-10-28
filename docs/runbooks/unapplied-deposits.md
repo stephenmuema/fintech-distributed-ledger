@@ -1,6 +1,6 @@
 # Runbook — Unapplied and unvalidated deposits
 
-Deposits arrive through M-Pesa paybill (Daraja C2B), KCB and Equity notifications, each relayed by Zirnis to the provider's module. Each one is credited by the account number the payer quoted, and only after the provider confirms it. Every deposit lands first in its provider's inward book (`MPESAIN`, `KCBIN`, `EQUITYIN`; GL 2520 — [ADR 0015](../adr/0015-built-in-providers-are-channels.md)); a deposit parked before provider books existed sits in unapplied receipts (GL 2500, type `UNAPPLIED`).
+Deposits arrive through M-Pesa paybill (Daraja C2B), KCB and Equity notifications, each relayed by Zirnis to the provider's module. Each one is credited by the account number the payer quoted, and only after the provider confirms it. Every deposit lands first in its provider's inward book (`MPESAIN`, `KCBIN`, `EQUITYIN`; GL 2520); a deposit parked before provider books existed sits in unapplied receipts (GL 2500, type `UNAPPLIED`).
 
 | Status | Meaning | Money sits in |
 |---|---|---|
@@ -26,7 +26,7 @@ Deposits arrive through M-Pesa paybill (Daraja C2B), KCB and Equity notification
 6. Unapplied deposits are re-matched automatically in the operations sweep and in COB (`AC.DEPOSITS.AUTOMATCH`), so a customer who opens their account after paying is credited without action.
 7. Each COB's EOD report lists deposits still unapplied after 7 days (`unapplied_deposits_over_7_days`, per currency). These need a person: trace the payer, or refund them through the provider.
 
-8. The same deposits can be worked from **Console → Suspense** (type `MPESAIN`, `KCBIN`, …): an item there carries the payer and reference as local fields. Bind a matcher such as `examples/extensions/python/mpesa_receipt_matcher.py` to the provider's channel (**Provider channels → Amend → Matching extension**) and it proposes the owner; matches at or above the channel's auto-clear confidence apply straight through (ADR 0011, ADR 0015).
+8. The same deposits can be worked from **Console → Suspense** (type `MPESAIN`, `KCBIN`, …): an item there carries the payer and reference as local fields. Bind a matcher such as `examples/extensions/python/mpesa_receipt_matcher.py` to the provider's channel (**Provider channels → Amend → Matching extension**) and it proposes the owner; matches at or above the channel's auto-clear confidence apply straight through.
 
 ## Follow up
 - Recurring wrong references from one payer: contact them, and consider C2B validation (`MPESA_REJECT_UNKNOWN_ACCOUNTS` in the M-Pesa module, on by default) so such payments are refused before money moves.

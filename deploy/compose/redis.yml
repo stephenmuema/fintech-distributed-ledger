@@ -1,4 +1,4 @@
-# Redis for rate limits shared between API instances (ADR 0030). Optional: without it each
+# Redis for rate limits shared between API instances. Optional: without it each
 # instance counts its own requests. A cache only, so nothing is persisted.
 #
 #   docker compose -f docker-compose.yml -f deploy/compose/redis.yml up -d --build

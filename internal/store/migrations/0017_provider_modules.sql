@@ -1,4 +1,4 @@
--- Providers are modules (ADR 0018): a provider channel names the module that serves it, its
+-- Providers are modules: a provider channel names the module that serves it, its
 -- routing priority and the capabilities a checker authorised. Channels opened for compiled-in
 -- connectors keep their books; they route nothing until an operator names their module.
 ALTER TABLE provider_channels ADD COLUMN module TEXT NOT NULL DEFAULT '';

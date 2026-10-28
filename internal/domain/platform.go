@@ -38,7 +38,7 @@ type OutboxMessage struct {
 	LastError     *string      `db:"last_error" json:"lastError"`
 	// ClaimedBy and ClaimedUntil: the dispatcher batch delivering it, so several instances never
 	// deliver one event at once. With RabbitMQ, "q:…" while queued and "c:…" while a consumer
-	// delivers it (ADR 0031).
+	// delivers it.
 	ClaimedBy    *string    `db:"claimed_by" json:"-"`
 	ClaimedUntil *time.Time `db:"claimed_until" json:"-"`
 }

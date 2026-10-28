@@ -26,10 +26,10 @@ These manifests run the API (three replicas or more, autoscaled), the web front 
 
 ## How the pods behave
 
-**The API runs three replicas or more** ([ADR 0030](../../docs/adr/0030-several-instances.md)). The instances coordinate through the database:
+**The API runs three replicas or more**. The instances coordinate through the database:
 - **Close of business** runs on one instance (a lease). After switching the business date, it waits until every live instance has finished the work that could still book to the closing day.
 - **Background jobs** run on the instance that holds each job's lease. Another instance takes a job over within three cycles if its holder dies.
-- **Webhooks** go through RabbitMQ: a relay on each instance publishes the outbox's events, and consumers on every instance deliver them ([ADR 0031](../../docs/adr/0031-rabbitmq-event-delivery.md)). Without `ZIRNIS_RABBITMQ_URL`, each event is claimed by one instance's dispatcher instead.
+- **Webhooks** go through RabbitMQ: a relay on each instance publishes the outbox's events, and consumers on every instance deliver them. Without `ZIRNIS_RABBITMQ_URL`, each event is claimed by one instance's dispatcher instead.
 - **Authorised changes** (a provider channel, a module, rates) reach every instance within 3 seconds.
 - **Rate limits** are shared through Redis. If Redis is down, each instance counts its own requests until it's back.
 
@@ -53,7 +53,7 @@ These manifests run the API (three replicas or more, autoscaled), the web front 
 3. lets the workers finish their current cycle;
 4. closes the database.
 
-`terminationGracePeriodSeconds: 45` covers all four. A card payment already sent to an acquirer finishes even if its client has gone. If the process is killed anyway, recovery settles the payment ([ADR 0003](../../docs/adr/0003-provider-orchestration-and-resilience.md)).
+`terminationGracePeriodSeconds: 45` covers all four. A card payment already sent to an acquirer finishes even if its client has gone. If the process is killed anyway, recovery settles the payment.
 
 **Web and PgBouncer are stateless:** two replicas each, spread across nodes. A `PodDisruptionBudget` lets node drains take only one pod of each at a time. Redis runs one replica: losing it costs only the shared rate-limit counts.
 

@@ -1,4 +1,4 @@
-// Package broker carries Zirnis's events over RabbitMQ (ADR 0031). The outbox stays the source
+// Package broker carries Zirnis's events over RabbitMQ. The outbox stays the source
 // of truth: the relay publishes what the outbox holds, and a message RabbitMQ drops is published
 // again once its claim lapses, so the broker never has to be trusted with the only copy.
 package broker

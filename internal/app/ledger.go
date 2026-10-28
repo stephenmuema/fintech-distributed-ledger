@@ -160,7 +160,7 @@ func (l *Ledger) Post(tx *store.Tx, b *domain.EntryBuilder, opts ...PostOptions)
 	return entry, nil
 }
 
-// spread moves the legs on a split account to the part this unit of work posts to (ADR 0028).
+// spread moves the legs on a split account to the part this unit of work posts to.
 // A unit of work uses one part throughout, so a book it credits and debits in the same commit (a
 // collection passing through the provider's inward book) nets to zero in that part.
 func (l *Ledger) spread(tx *store.Tx, b *domain.EntryBuilder, o *PostOptions) error {
@@ -228,7 +228,7 @@ func (l *Ledger) openPart(tx *store.Tx, a *domain.LedgerAccount, n int) (uuid.UU
 }
 
 // Totals is accounts as views show them: each split account with its total over its parts, and
-// the parts left out (ADR 0028).
+// the parts left out.
 func (l *Ledger) Totals(q store.Q, accounts []domain.LedgerAccount) ([]domain.LedgerAccount, error) {
 	var parents []uuid.UUID
 	for _, a := range accounts {
@@ -337,9 +337,9 @@ func (f *ledgerFlush) defer_(line *domain.JournalLine, shared, overdraft []*doma
 // an atomic increment, its true balance is read back under the row lock and checked, and its
 // lines are written with their running balances.
 //
-// A split account that must not go negative is checked on its total, not part by part (ADR
-// 0028). A unit of work taking money out of one takes the account's floor lock before any row,
-// so those check one after the other; credits never take it.
+// A split account that must not go negative is checked on its total, not part by part. A unit
+// of work taking money out of one takes the account's floor lock before any row, so those
+// check one after the other; credits never take it.
 func (f *ledgerFlush) write(tx *store.Tx) error {
 	ids := make([]uuid.UUID, 0, len(f.deltas))
 	for id := range f.deltas {

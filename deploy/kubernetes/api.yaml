@@ -1,4 +1,4 @@
-# The API: three replicas or more, autoscaled (ADR 0030). Instances coordinate through the
+# The API: three replicas or more, autoscaled. Instances coordinate through the
 # database: close of business waits for every live instance, singleton jobs run under leases,
 # webhooks are claimed, and authorised changes reach every instance within seconds.
 #

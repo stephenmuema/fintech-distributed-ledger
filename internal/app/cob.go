@@ -72,7 +72,7 @@ type Cob struct {
 // renews it as COB runs, so another instance can resume a COB only once its runner has died.
 const cobLease = time.Minute
 
-// Run runs close of business, on one instance at a time (the "cob" lease, ADR 0030).
+// Run runs close of business, on one instance at a time (the "cob" lease).
 func (c *Cob) Run(ctx context.Context) (*domain.CobRun, error) {
 	if !c.gate.TryLock() {
 		return nil, domain.Conflict("cob_in_progress", "Close of Business is already running.")
@@ -205,7 +205,7 @@ func (c *Cob) startOrResume(ctx context.Context) (uuid.UUID, error) {
 		return runID, err
 	}
 	// A posting that read "online, today" before the switch books to today: let it commit before
-	// the end-of-day jobs take today's balances, on this instance and every other (ADR 0030).
+	// the end-of-day jobs take today's balances, on this instance and every other.
 	// Postings that start now book to the next day.
 	return runID, c.a.awaitInstances(ctx, runID)
 }

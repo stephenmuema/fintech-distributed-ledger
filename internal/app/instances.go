@@ -10,7 +10,7 @@ import (
 	"github.com/stephenmuema/finnie/internal/store"
 )
 
-// Several instances share the database (ADR 0030). Each records a heartbeat; close of business,
+// Several instances share the database. Each records a heartbeat; close of business,
 // after switching the business date, waits until every live instance has acknowledged the switch.
 // An instance acknowledges once its own units of work that began before it saw the switch have
 // finished, so none of them can still book to the day being closed.

@@ -1,4 +1,4 @@
--- The change log (ADR 0024): every update of a historised record, field by field — who changed
+-- The change log: every update of a historised record, field by field — who changed
 -- what, when, and from what to what. Append-only, like the audit trail.
 CREATE TABLE record_changes (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,

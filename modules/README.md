@@ -1,6 +1,6 @@
 # Provider modules
 
-Every payment provider Zirnis uses is a module here. None of their code is in the core ([ADR 0018](../docs/adr/0018-providers-are-modules.md)). Each module is its own Go module (`go.mod`), image and release, and imports only Zirnis's public contracts:
+Every payment provider Zirnis uses is a module here. None of their code is in the core. Each module is its own Go module (`go.mod`), image and release, and imports only Zirnis's public contracts:
 
 - [`pkg/provapi`](../pkg/provapi): the provider protocol;
 - [`pkg/provtest`](../pkg/provtest): the end-to-end test kit.

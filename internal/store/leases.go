@@ -6,7 +6,7 @@ import (
 )
 
 // Lease takes or renews the named lease for holder until ttl from now, and reports whether
-// holder has it (ADR 0030). A lease another holder let expire is taken over. Leases run on the
+// holder has it. A lease another holder let expire is taken over. Leases run on the
 // wall clock: they are about time passing between processes, not the business date.
 func (s *Store) Lease(ctx context.Context, name, holder string, ttl time.Duration) (bool, error) {
 	q := dbQ{s.writer, ctx, s.dialect}
