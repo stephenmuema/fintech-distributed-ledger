@@ -13,7 +13,7 @@ All of it sits on a core layer: business dates, Close of Business (COB), a gener
 - **Console and hosted checkout:** React.
 - **Payment providers:** separate module services. Zirnis has no provider code of its own.
 
-This distributed ledger works for Fintech and small lenders.
+This scalable distributed ledger works for Fintech and lenders.
 
 ## Run it
 
