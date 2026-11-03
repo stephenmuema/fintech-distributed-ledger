@@ -195,7 +195,7 @@ function CustomerPosition({ number, onChange }: { number: number; onChange: () =
       )}
       <div className="inline-form">
         <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
-          {['KES', 'USD', 'EUR', 'GBP', 'UGX', 'TZS', 'NGN'].map((c) => <option key={c}>{c}</option>)}
+          {['KES', 'USD', 'EUR', 'GBP', 'UGX', 'TZS', 'NGN', 'USDC'].map((c) => <option key={c}>{c}</option>)}
         </select>
         <Button variant="ghost" busy={open.busy} onClick={() => after(open.run(customer))}>Open {currency} account</Button>
       </div>

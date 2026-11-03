@@ -7,14 +7,15 @@ import { Lock } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button, ErrorNote, Loading } from '../console/ui'
 import '../console/console.css'
+import { WalletPayment } from './WalletPayment'
 
 // How the payer can pay this link: a push to their phone, a card on the provider's own page, or
 // (sandbox only) a test card token.
-type Methods = { mobileMoney: boolean; hostedCard: boolean; cardToken: boolean }
+type Methods = { mobileMoney: boolean; hostedCard: boolean; cardToken: boolean; stablecoin?: boolean }
 type Link = { code: string; description: string; amount?: number; currency: string; isActive: boolean; expiresAt?: string; methods: Methods; sandbox: boolean }
 type NextAction = { type: string; url: string; fields?: Record<string, string> }
 // The payer sees the payment's outcome: Completed, Processing (waiting for the PIN) or Failed.
-type Result = { reference: string; status: string; amount: number; currency: string; failureCode?: string; providerReference?: string; nextAction?: NextAction }
+type Result = { reference: string; paymentId?: string; status: string; amount: number; currency: string; failureCode?: string; providerReference?: string; nextAction?: NextAction }
 type Payer = { firstName: string; lastName: string; email: string; phone: string; address: string; postalCode: string }
 
 const noPayer: Payer = { firstName: '', lastName: '', email: '', phone: '', address: '', postalCode: '' }
@@ -63,7 +64,7 @@ export default function Checkout() {
 
 function Pay({ link }: { link: Link }) {
   const card = link.methods.hostedCard || link.methods.cardToken
-  const [method, setMethod] = useState<'MobileMoney' | 'Card'>(link.methods.mobileMoney ? 'MobileMoney' : 'Card')
+  const [method, setMethod] = useState<'MobileMoney' | 'Card' | 'Stablecoin'>(link.methods.mobileMoney ? 'MobileMoney' : link.methods.stablecoin ? 'Stablecoin' : 'Card')
   const [phone, setPhone] = useState(link.sandbox ? '+254712345678' : '')
   const [token, setToken] = useState('tok_visa')
   const [payer, setPayer] = useState<Payer>(noPayer)
@@ -73,14 +74,15 @@ function Pay({ link }: { link: Link }) {
   const hosted = method === 'Card' && link.methods.hostedCard
 
   const pay = useAction(async () => {
-    const source = method === 'MobileMoney' ? phone : hosted ? 'hosted_checkout' : token
+    if (link.amount != null && !Number.isSafeInteger(link.amount)) throw new Error('This amount exceeds the checkout range. Contact the merchant.')
+    const source = method === 'Stablecoin' ? 'wallet' : method === 'MobileMoney' ? phone : hosted ? 'hosted_checkout' : token
     const result = await api<Result>(`/pay/${link.code}`, {
       method: 'POST',
       anonymous: true,
       idempotencyKey,
       body: { method, source, amount: link.amount ? null : toMinor(custom, link.currency), customer: hosted ? payer : undefined },
     })
-    if (result.nextAction) follow(result.nextAction)
+    if (result.nextAction && result.nextAction.type !== 'evm_payment') follow(result.nextAction)
     return result
   })
   // Sandbox only: stands in for the payer approving the STK push on their phone.
@@ -89,7 +91,18 @@ function Pay({ link }: { link: Link }) {
     return { ...r, status: 'Completed' }
   })
 
-  const result = approve.result ?? pay.result
+  const [observed, setObserved] = useState<Result>()
+  const result = observed ?? approve.result ?? pay.result
+  useEffect(() => {
+    if (!result?.paymentId || result.status !== 'Processing') return
+    let active = true
+    const timer = setInterval(() => {
+      void api<Result>(`/pay/${link.code}/payments/${result.paymentId}`, { anonymous: true }).then((latest) => {
+        if (active) setObserved({ ...result, ...latest })
+      }).catch(() => { /* Keep the pending state while connectivity recovers. */ })
+    }, 5000)
+    return () => { active = false; clearInterval(timer) }
+  }, [link.code, result])
   const submit = (e: FormEvent) => {
     e.preventDefault()
     void pay.run()
@@ -104,13 +117,14 @@ function Pay({ link }: { link: Link }) {
   return (
     <>
       <h1 className="text-lg font-semibold">{link.description}</h1>
-      <p className="checkout-amount">{link.amount ? money(link.amount, link.currency) : `Enter an amount in ${link.currency}`}</p>
+      <p className="checkout-amount">{link.amount ? Number.isSafeInteger(link.amount) ? money(link.amount, link.currency) : 'This amount exceeds the checkout range. Contact the merchant.' : `Enter an amount in ${link.currency}`}</p>
 
       {result ? (
         <div className={`checkout-result ${result.status === 'Completed' ? 'good' : result.status === 'Failed' ? 'bad' : ''}`}>
           {result.status === 'Completed' && <><strong>Payment received.</strong><p>Thank you — {money(result.amount, result.currency)} has been paid.</p></>}
           {result.status === 'Failed' && <><strong>Payment failed.</strong><p>{result.failureCode?.replace(/_/g, ' ')}. Please try another method.</p></>}
-          {result.status === 'Processing' && result.nextAction && <><strong>Taking you to the card page…</strong><p>Finish the payment there.</p></>}
+          {result.status === 'Processing' && result.nextAction?.type === 'evm_payment' && <WalletPayment next={result.nextAction} />}
+          {result.status === 'Processing' && result.nextAction && result.nextAction.type !== 'evm_payment' && <><strong>Taking you to the card page…</strong><p>Finish the payment there.</p></>}
           {result.status === 'Processing' && !result.nextAction && (
             <>
               <strong>Check your phone.</strong>
@@ -122,17 +136,18 @@ function Pay({ link }: { link: Link }) {
             </>
           )}
         </div>
-      ) : !link.methods.mobileMoney && !card ? (
+      ) : !link.methods.mobileMoney && !card && !link.methods.stablecoin ? (
         <p className="muted">This link can't be paid right now. Please contact whoever sent it.</p>
       ) : (
         <form className="form" onSubmit={submit}>
           {!link.amount && (
             <label className="field"><span className="mono-label">AMOUNT</span><input required inputMode="decimal" value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="1,500" /></label>
           )}
-          {link.methods.mobileMoney && card && (
+          {([link.methods.mobileMoney, card, link.methods.stablecoin].filter(Boolean).length > 1) && (
             <div className="segmented">
-              <button type="button" className={method === 'MobileMoney' ? 'on' : ''} onClick={() => setMethod('MobileMoney')}>M-Pesa</button>
-              <button type="button" className={method === 'Card' ? 'on' : ''} onClick={() => setMethod('Card')}>Card</button>
+              {link.methods.mobileMoney && <button type="button" className={method === 'MobileMoney' ? 'on' : ''} onClick={() => setMethod('MobileMoney')}>M-Pesa</button>}
+              {card && <button type="button" className={method === 'Card' ? 'on' : ''} onClick={() => setMethod('Card')}>Card</button>}
+              {link.methods.stablecoin && <button type="button" className={method === 'Stablecoin' ? 'on' : ''} onClick={() => setMethod('Stablecoin')}>USDC</button>}
             </div>
           )}
           {method === 'MobileMoney' && (
@@ -158,7 +173,7 @@ function Pay({ link }: { link: Link }) {
             </label>
           )}
           <ErrorNote error={pay.error} />
-          <Button className="w-full" busy={pay.busy} disabled={!link.isActive}>{hosted ? 'Continue to card payment' : 'Pay now'}</Button>
+          <Button className="w-full" busy={pay.busy} disabled={!link.isActive || (link.amount != null && !Number.isSafeInteger(link.amount))}>{hosted ? 'Continue to card payment' : 'Pay now'}</Button>
         </form>
       )}
       <p className="checkout-foot">

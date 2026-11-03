@@ -15,6 +15,9 @@ All of it sits on a core layer: business dates, Close of Business (COB), a gener
 
 This scalable distributed ledger works for Fintech and lenders.
 
+USDC wallet collections and Solidity payment/escrow contracts are available through the
+[stablecoin module](docs/guides/stablecoins.md), including a local chain-to-ledger demo.
+
 ## Run it
 
 ```bash

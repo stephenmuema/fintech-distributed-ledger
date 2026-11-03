@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"math"
 	"sort"
 	"strings"
 
@@ -12,7 +13,7 @@ func init() {
 	decimal.MarshalJSONWithoutQuotes = true
 }
 
-// Currency is an ISO-4217 currency with its minor-unit exponent. All money in Zirnis is held
+// Currency is a supported fiat currency or settlement asset with its minor-unit exponent. All money in Zirnis is held
 // as int64 minor units (cents, or shillings for UGX) — never floating point.
 type Currency struct {
 	Code     string
@@ -20,13 +21,14 @@ type Currency struct {
 }
 
 var supportedCurrencies = map[string]Currency{
-	"KES": {"KES", 2},
-	"UGX": {"UGX", 0},
-	"TZS": {"TZS", 2},
-	"NGN": {"NGN", 2},
-	"USD": {"USD", 2},
-	"EUR": {"EUR", 2},
-	"GBP": {"GBP", 2},
+	"KES":  {"KES", 2},
+	"UGX":  {"UGX", 0},
+	"TZS":  {"TZS", 2},
+	"NGN":  {"NGN", 2},
+	"USD":  {"USD", 2},
+	"EUR":  {"EUR", 2},
+	"GBP":  {"GBP", 2},
+	"USDC": {"USDC", 6},
 }
 
 // SupportedCurrencies returns the supported codes in alphabetical order.
@@ -80,6 +82,9 @@ func (c Currency) ParseMajor(s string) (int64, error) {
 	minor := d.Shift(c.Exponent)
 	if !minor.Equal(minor.Truncate(0)) {
 		return 0, Rule("invalid_amount", "'%s' has more decimals than %s allows.", s, c.Code)
+	}
+	if minor.GreaterThan(decimal.NewFromInt(math.MaxInt64)) || minor.LessThan(decimal.NewFromInt(math.MinInt64)) {
+		return 0, Rule("invalid_amount", "'%s' exceeds the supported amount range.", s)
 	}
 	return minor.IntPart(), nil
 }

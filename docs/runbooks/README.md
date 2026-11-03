@@ -14,6 +14,8 @@ Operational playbooks for the incidents a payments platform actually has. Each o
 | [Nostro breaks](nostro-breaks.md) | Statement proof not closing; open lines on `/ops/nostros`; COB `NV.RECON.CHECK` warning or halt |
 | [Backup and restore](backup-restore.md) | Database lost or corrupted; quarterly restore drill; before go-live |
 | [Unapplied and unvalidated deposits](unapplied-deposits.md) | GL 2500 not clearing; deposits `PendingValidation` or `unverified`; `deposit.rejected_by_provider` in the audit trail |
+| [Deploying the core](deploy-core.md) | A new release of the API or the web front; a settings change |
+| [Deploying provider modules](deploy-modules.md) | A new module or module release; a new provider; rotating a module secret or provider credentials; retiring a provider |
 
 Severity guide:
 - **SEV1:** money is wrong or unaccounted for (trial balance broken, ledger drift, double credit).

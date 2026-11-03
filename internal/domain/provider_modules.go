@@ -127,7 +127,7 @@ func (c ProviderCapabilities) Currencies() []string {
 // Normalize validates a description from a module: known methods, rails and currencies only.
 func (c *ProviderCapabilities) Normalize() error {
 	for i, col := range c.Collections {
-		method, ok := ParseEnum(string(col.Method), MethodCard, MethodMobileMoney)
+		method, ok := ParseEnum(string(col.Method), MethodCard, MethodMobileMoney, MethodStablecoin)
 		if !ok {
 			return Rule("invalid_capabilities", "Unknown payment method '%s'.", col.Method)
 		}

@@ -58,6 +58,7 @@ services:
       ZIRNIS_MODULE_MPESA_SECRET: ${ZIRNIS_MODULE_MPESA_SECRET:-}
       ZIRNIS_MODULE_KCB_SECRET: ${ZIRNIS_MODULE_KCB_SECRET:-}
       ZIRNIS_MODULE_EQUITY_SECRET: ${ZIRNIS_MODULE_EQUITY_SECRET:-}
+      ZIRNIS_MODULE_STABLECOIN_SECRET: ${ZIRNIS_MODULE_STABLECOIN_SECRET:-}
     ports:
       - "5080:8080"
     volumes:
@@ -102,6 +103,18 @@ services:
     environment:
       ZIRNIS_MODULE_SECRET: ${ZIRNIS_MODULE_EQUITY_SECRET:-}
       ZIRNIS_PUBLIC_URL: ${ZIRNIS_PUBLIC_URL:-}
+    restart: unless-stopped
+
+  # Opt in separately: configure and deploy the payment contract before enabling this module.
+  stablecoin-module:
+    profiles: [stablecoin]
+    build: { context: ., dockerfile: modules/Dockerfile, args: { MODULE: stablecoin } }
+    image: zirnis-stablecoin-module:local
+    env_file:
+      - path: deploy/modules/stablecoin.env
+        required: false
+    environment:
+      ZIRNIS_MODULE_SECRET: ${ZIRNIS_MODULE_STABLECOIN_SECRET:-}
     restart: unless-stopped
 
   web:

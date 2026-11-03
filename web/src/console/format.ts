@@ -1,10 +1,18 @@
-const exponents: Record<string, number> = { KES: 2, UGX: 0, TZS: 2, NGN: 2, USD: 2, EUR: 2, GBP: 2 }
+const exponents: Record<string, number> = { KES: 2, UGX: 0, TZS: 2, NGN: 2, USD: 2, EUR: 2, GBP: 2, USDC: 6 }
 
 export const exponent = (currency: string) => exponents[currency] ?? 2
 
 /** Formats integer minor units, e.g. 123456 KES → "1,234.56". */
 export function amount(minor: number, currency: string): string {
   const e = exponent(currency)
+  if (Number.isSafeInteger(minor)) {
+    const atomic = BigInt(minor)
+    const absolute = atomic < 0n ? -atomic : atomic
+    const scale = 10n ** BigInt(e)
+    const whole = (absolute / scale).toLocaleString('en-KE')
+    const fraction = e ? `.${(absolute % scale).toString().padStart(e, '0')}` : ''
+    return `${atomic < 0n ? '-' : ''}${whole}${fraction}`
+  }
   return (minor / 10 ** e).toLocaleString('en-KE', { minimumFractionDigits: e, maximumFractionDigits: e })
 }
 
@@ -12,9 +20,14 @@ export const money = (minor: number, currency: string) => `${currency} ${amount(
 
 /** Parses a major-unit input ("1,250.50") into integer minor units. */
 export function toMinor(major: string, currency: string): number {
-  const value = Number(major.replace(/,/g, ''))
-  if (!Number.isFinite(value) || value <= 0) throw new Error('Enter a positive amount')
-  return Math.round(value * 10 ** exponent(currency))
+  const value = major.replace(/,/g, '').trim()
+  const places = exponent(currency)
+  if (!/^\d+(\.\d+)?$/.test(value)) throw new Error('Enter a positive amount')
+  const [whole, fraction = ''] = value.split('.')
+  if (fraction.length > places) throw new Error(`${currency} allows at most ${places} decimal places`)
+  const minor = BigInt(whole) * 10n ** BigInt(places) + BigInt(fraction.padEnd(places, '0') || '0')
+  if (minor <= 0n || minor > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Amount is outside the supported range')
+  return Number(minor)
 }
 
 export const lcy = (value: number, currency = 'KES') =>

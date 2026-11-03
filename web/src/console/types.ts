@@ -78,7 +78,7 @@ export type Payment = {
   accountId: string
   amount: number
   currency: string
-  method: 'Card' | 'MobileMoney'
+  method: 'Card' | 'MobileMoney' | 'Stablecoin'
   paymentSource: string
   status: string
   provider?: string

@@ -57,7 +57,7 @@ const presets = [
   { value: '365', label: 'Last 365 days' },
   { value: 'custom', label: 'Custom range' },
 ]
-const currencies = ['KES', 'USD', 'EUR', 'GBP', 'UGX', 'TZS', 'NGN']
+const currencies = ['KES', 'USD', 'EUR', 'GBP', 'UGX', 'TZS', 'NGN', 'USDC']
 
 const number = new Intl.NumberFormat('en-KE')
 const compact = new Intl.NumberFormat('en-KE', { notation: 'compact', maximumFractionDigits: 1 })

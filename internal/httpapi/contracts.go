@@ -49,7 +49,7 @@ type setTierRequest struct {
 
 type openAccountRequest struct {
 	CustomerID uuid.UUID `json:"customerId"`
-	Currency   string    `json:"currency" validate:"required,len=3"`
+	Currency   string    `json:"currency" validate:"required,max=4"`
 }
 
 type restrictionRequest struct {
@@ -60,8 +60,8 @@ type restrictionRequest struct {
 type createPaymentRequest struct {
 	AccountID   uuid.UUID `json:"accountId"`
 	Amount      int64     `json:"amount" validate:"min=1"`
-	Currency    string    `json:"currency" validate:"required,len=3"`
-	Method      string    `json:"method" validate:"oneof=Card|MobileMoney"`
+	Currency    string    `json:"currency" validate:"required,max=4"`
+	Method      string    `json:"method" validate:"oneof=Card|MobileMoney|Stablecoin"`
 	Source      string    `json:"source" validate:"required"` // card token, MSISDN, or "hosted_checkout"
 	Description *string   `json:"description" validate:"max=200"`
 	// Hosted card checkout (source "hosted_checkout"): the payer, and where their browser returns.
@@ -102,7 +102,7 @@ type createPaymentLinkRequest struct {
 
 type payLinkRequest struct {
 	Amount   *int64                   `json:"amount" validate:"min=1"`
-	Method   string                   `json:"method" validate:"oneof=Card|MobileMoney"`
+	Method   string                   `json:"method" validate:"oneof=Card|MobileMoney|Stablecoin"`
 	Source   string                   `json:"source" validate:"required"`
 	Customer *checkoutCustomerRequest `json:"customer"`
 }

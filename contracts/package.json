@@ -1,0 +1,21 @@
+{
+  "name": "zirnis-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/compile.mjs",
+    "test": "node --test test/*.test.mjs",
+    "deploy:local": "node scripts/deploy-local.mjs",
+    "pay:local": "node scripts/pay-local.mjs",
+    "test:integration": "node scripts/test-integration.mjs"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "5.4.0"
+  },
+  "devDependencies": {
+    "ethers": "6.15.0",
+    "ganache": "7.9.2",
+    "solc": "0.8.30"
+  }
+}

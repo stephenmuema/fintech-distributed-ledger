@@ -7,7 +7,7 @@ import { PendingChanges } from '../pending'
 import type { Account, Channel, ChannelSpec, ChannelTransfer, ChannelView, Extension, LocalField, ProviderCapabilities, SuspenseEvent, TransactionView } from '../types'
 import { Badge, Button, Empty, ErrorNote, Field, Mono, PageHeader, Panel, Stat } from '../ui'
 
-const currencies = ['KES', 'UGX', 'TZS', 'NGN', 'USD', 'EUR', 'GBP']
+const currencies = ['KES', 'UGX', 'TZS', 'NGN', 'USD', 'EUR', 'GBP', 'USDC']
 
 const blank: ChannelSpec = {
   name: '', description: '', currencies: ['KES'], inward: false, outward: true, extension: '', settlementAccounts: {},

@@ -13,6 +13,7 @@ A module can move to its own repository by replacing the `replace` lines in its 
 | [`kcb`](kcb) | `kcb`, `kcb-mpesa` (KCB Buni) | `go run ./cmd/kcb-module` |
 | [`equity`](equity) | `equity`, `jenga-pgw` (Equity Jenga, card checkout) | `go run ./cmd/equity-module` |
 | [`verto`](verto) | the `VERTO` transfer channel | `go run ./cmd/verto-module` |
+| [`stablecoin`](stablecoin) | `usdc` (EVM wallet collections; [guide](../docs/guides/stablecoins.md)) | `go run ./cmd/stablecoin-module` |
 | [`kit`](kit) | — | shared plumbing: safe HTTP calls, OAuth tokens, RSA, amounts, `Serve`, test fakes |
 
 Each command documents its environment in its header comment. Examples are in [`deploy/modules`](../deploy/modules).
@@ -45,4 +46,4 @@ Each command documents its environment in its header comment. Examples are in [`
 5. **Authenticate callbacks in `Webhook`** and return normalised events. Zirnis confirms them with the provider through your checks before any money moves, so implement a check whenever the provider offers one.
 6. **Test end to end** with `provtest.New(t, provtest.Options{Module: …})` against a fake of the provider's API (`kit/kittest`). `h.Collect`, `h.Payout`, `h.Transaction(ref)` and `h.Flow(ref)` drive `/transactions` as the app does. [`mpesa/e2e_test.go`](mpesa/e2e_test.go) is the model.
 
-The full walkthrough, with M-Pesa and Verto, is in [docs/guides/adding-a-provider.md](../docs/guides/adding-a-provider.md).
+The full walkthrough, with M-Pesa and Verto, is in [docs/guides/adding-a-provider.md](../docs/guides/adding-a-provider.md). Building, running, upgrading and retiring modules in production is in [the module deployment runbook](../docs/runbooks/deploy-modules.md).

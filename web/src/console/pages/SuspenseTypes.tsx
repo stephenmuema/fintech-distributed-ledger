@@ -6,7 +6,7 @@ import { PendingChanges } from '../pending'
 import type { Extension, LocalField, SuspenseType, SuspenseTypeSpec } from '../types'
 import { Badge, Button, Empty, ErrorNote, Field, Mono, PageHeader, Panel } from '../ui'
 
-const currencies = ['KES', 'UGX', 'TZS', 'NGN', 'USD', 'EUR', 'GBP']
+const currencies = ['KES', 'UGX', 'TZS', 'NGN', 'USD', 'EUR', 'GBP', 'USDC']
 const targets = ['Customer', 'Internal', 'PnL']
 
 const blank: SuspenseTypeSpec = {

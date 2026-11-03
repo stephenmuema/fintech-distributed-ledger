@@ -6,6 +6,8 @@ Zirnis ships as two containers:
 
 Zirnis is an internal system. Only the payer edge is published to the internet (see [below](#payment-links-and-the-payer-edge)).
 
+[architecture.md](architecture.md) shows how the parts fit together. The release procedures are in the runbooks: [deploying the core](runbooks/deploy-core.md) and [deploying provider modules](runbooks/deploy-modules.md).
+
 The API runs on any of five relational databases, and can optionally copy its evidence to MongoDB. Everything is configured through environment variables, from `.env` or the platform.
 
 ## Run it with Docker

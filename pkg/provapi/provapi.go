@@ -46,6 +46,7 @@ const APIVersion = "1"
 const (
 	MethodCard        = "Card"
 	MethodMobileMoney = "MobileMoney"
+	MethodStablecoin  = "Stablecoin"
 
 	RailMobileMoney = "MobileMoney"
 	RailBank        = "Bank"
@@ -134,7 +135,7 @@ type Result struct {
 
 // NextAction tells the payer's browser where to go, e.g. a form to post to a hosted checkout.
 type NextAction struct {
-	Type      string            `json:"type"` // post_form
+	Type      string            `json:"type"` // post_form or evm_payment (Fields carry wallet instructions)
 	URL       string            `json:"url"`
 	Fields    map[string]string `json:"fields,omitempty"`
 	ExpiresAt time.Time         `json:"expiresAt"`

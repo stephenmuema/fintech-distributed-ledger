@@ -15,6 +15,7 @@ type PaymentMethod string
 const (
 	MethodCard        PaymentMethod = "Card"
 	MethodMobileMoney PaymentMethod = "MobileMoney"
+	MethodStablecoin  PaymentMethod = "Stablecoin"
 )
 
 // SourceHostedCheckout is the payment source of a card payment the payer completes on the
@@ -85,7 +86,7 @@ type PaymentIntent struct {
 // NextAction tells the client how to finish a payment that needs the payer: post Fields to URL
 // from the payer's browser (a hosted checkout).
 type NextAction struct {
-	Type      string            `json:"type"` // post_form
+	Type      string            `json:"type"` // post_form or evm_payment
 	URL       string            `json:"url"`
 	Fields    map[string]string `json:"fields"`
 	ExpiresAt time.Time         `json:"expiresAt"`
@@ -96,7 +97,7 @@ func NewPaymentIntent(merchantID, walletID uuid.UUID, amount int64, currency str
 		return nil, Rule("invalid_amount", "Amount must be greater than zero.")
 	}
 	if strings.TrimSpace(source) == "" {
-		return nil, Rule("invalid_payment_source", "A card token or mobile number is required.")
+		return nil, Rule("invalid_payment_source", "A payment source is required.")
 	}
 	ccy, err := CurrencyOf(currency)
 	if err != nil {

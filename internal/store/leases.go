@@ -41,7 +41,9 @@ func (s *Store) WithLease(ctx context.Context, name, holder string, ttl time.Dur
 		return false, err
 	}
 	done := make(chan struct{})
+	stopped := make(chan struct{})
 	go func() {
+		defer close(stopped)
 		tick := time.NewTicker(ttl / 3)
 		defer tick.Stop()
 		for {
@@ -55,6 +57,9 @@ func (s *Store) WithLease(ctx context.Context, name, holder string, ttl time.Dur
 	}()
 	defer func() {
 		close(done)
+		// A renewal already in flight must finish before release. Otherwise it can
+		// renew the lease after release, leaving a completed job holding the lease.
+		<-stopped
 		s.release(context.WithoutCancel(ctx), name, holder)
 	}()
 	return true, fn()

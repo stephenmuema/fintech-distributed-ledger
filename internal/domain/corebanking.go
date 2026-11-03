@@ -437,6 +437,7 @@ func (m ManualAdjustment) MarshalJSON() ([]byte, error) {
 const (
 	ChargeCardCollection        = "CARDCOLL"
 	ChargeMobileMoneyCollection = "MMCOLL"
+	ChargeStablecoinCollection  = "USDCOLL"
 	ChargeMobileMoneyPayout     = "MMPAYOUT"
 	ChargeBankPayout            = "BANKPAYOUT"
 	ChargeFxSpread              = "FXSPREAD"

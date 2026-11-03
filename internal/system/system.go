@@ -156,7 +156,11 @@ func localProviders(cfg config.Config, simulator *providers.Simulator, logger *s
 // the static simulated table would never move with the market.
 func rateProvider(cfg config.Config, clk clock.Clock) app.FxRateProvider {
 	if cfg.SandboxEnabled() {
-		return providers.NewRates(providers.DefaultPerUSD(), clk)
+		rates := providers.DefaultPerUSD()
+		// A simulated peg for local tests only. Production requires treasury to authorise an
+		// explicit USDC valuation; USD and USDC are never the same ledger asset.
+		rates["USDC"] = decimal.NewFromInt(1)
+		return providers.NewRates(rates, clk)
 	}
 	return app.NewTableRates(providers.DefaultPerUSD())
 }

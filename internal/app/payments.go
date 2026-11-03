@@ -122,6 +122,15 @@ func (s *Payments) PayLink(ctx context.Context, code string, cmd PayLink) (*doma
 
 func (s *Payments) newIntent(tx *store.Tx, wallet *domain.Wallet, amount int64, currency string, method domain.PaymentMethod,
 	source string, description *string, linkID *uuid.UUID, returnURL *string) (*domain.PaymentIntent, error) {
+	if method == domain.MethodStablecoin {
+		charge, err := store.Get[domain.ChargeType](tx, "SELECT * FROM charge_types WHERE code = ?", domain.ChargeStablecoinCollection)
+		if err != nil {
+			return nil, err
+		}
+		if charge == nil {
+			return nil, domain.Rule("stablecoin_pricing_required", "USDC payments are not available yet. Please contact the merchant.")
+		}
+	}
 	if err := wallet.EnsureCanCredit(); err != nil {
 		return nil, err
 	}
@@ -411,6 +420,9 @@ func (s *Payments) complete(tx *store.Tx, intent *domain.PaymentIntent, provider
 	code := domain.ChargeMobileMoneyCollection
 	if intent.Method == domain.MethodCard {
 		code = domain.ChargeCardCollection
+	}
+	if intent.Method == domain.MethodStablecoin {
+		code = domain.ChargeStablecoinCollection
 	}
 	fee, err := s.a.Charges.Calculate(tx, code, intent.Amount)
 	if err != nil {
@@ -801,6 +813,24 @@ func (s *PaymentLinks) GetByCode(ctx context.Context, code string) (*domain.Paym
 	return s.loadByCode(s.a.read(ctx), code)
 }
 
+// PaymentStatus returns a payment belonging to this link, without exposing merchant records.
+// Both the random link code and the payment UUID are capabilities; an unrelated id receives
+// a not-found answer. Reading status never triggers provider calls or ledger work.
+func (s *PaymentLinks) PaymentStatus(ctx context.Context, code string, id uuid.UUID) (*domain.PaymentIntent, error) {
+	link, err := s.GetByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+	payment, err := s.a.Payments.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if payment.PaymentLinkID == nil || *payment.PaymentLinkID != link.ID {
+		return nil, domain.NotFound("payment", id)
+	}
+	return payment, nil
+}
+
 func (s *PaymentLinks) List(ctx context.Context, walletID uuid.UUID) ([]domain.PaymentLink, error) {
 	return store.Select[domain.PaymentLink](s.a.read(ctx), "SELECT * FROM payment_links WHERE merchant_wallet_id = ? ORDER BY created_at DESC", walletID)
 }
@@ -1002,10 +1032,24 @@ func (s *Payments) ResolveStale(ctx context.Context, olderThan time.Duration) (i
 		}
 		result, err := s.a.checkCharge(ctx, provider.Name(), provider, *p.ProviderReference, "payment", p.ID.String())
 		if err != nil || result.Outcome == ProviderPending {
+			if p.Method == domain.MethodStablecoin {
+				// Wallet invoices can remain unpaid indefinitely. Rotate checked invoices
+				// behind older unchecked ones so the first 100 cannot starve paid invoices.
+				if err := s.a.db.Atomic(ctx, func(tx *store.Tx) error {
+					current, err := s.load(tx, p.ID)
+					if err != nil || current.Status != domain.PaymentProcessing {
+						return err
+					}
+					current.UpdatedAt = tx.Now()
+					return tx.Update("payments", current)
+				}); err != nil {
+					return resolved, err
+				}
+			}
 			continue // still unknown: try again next sweep
 		}
 		evt := ProviderEvent{EventID: "status-query:" + *p.ProviderReference, Type: "charge.succeeded", Reference: *p.ProviderReference,
-			Amount: &p.Amount, Currency: &p.Currency}
+			Amount: &p.Amount, Currency: &p.Currency, Details: result.Details}
 		if result.Outcome == ProviderDeclined {
 			evt.Type, evt.FailureCode = "charge.failed", optional(result.DeclineCode)
 		}
@@ -1014,6 +1058,7 @@ func (s *Payments) ResolveStale(ctx context.Context, olderThan time.Duration) (i
 			return resolved, err
 		}
 		if outcome == "processed" {
+			s.a.Transactions.recordDetails(ctx, provider.Name(), result.Details, byFlowRecord(p.ID.String()))
 			resolved++
 		}
 	}

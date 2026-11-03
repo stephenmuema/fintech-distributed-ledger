@@ -21,7 +21,7 @@ type transactionRequest struct {
 	DebitAccount   string   `json:"debitAccount" validate:"max=34"`
 	CreditAccount  string   `json:"creditAccount" validate:"max=34"`
 	Amount         *int64   `json:"amount" validate:"min=1"`
-	Currency       string   `json:"currency" validate:"max=3"`
+	Currency       string   `json:"currency" validate:"max=4"`
 	Narrative      string   `json:"narrative" validate:"max=140"`
 	PaymentDetails []string `json:"paymentDetails"`
 	// Collections: the method, the card token / MSISDN / "hosted_checkout", the payer and where

@@ -732,6 +732,7 @@ func (s *Server) mapPayments() {
 				"mobileMoney": len(s.app.Router.CollectionRoute(domain.MethodMobileMoney, link.Currency)) > 0,
 				"hostedCard":  len(s.app.Router.HostedCollectionRoute(domain.MethodCard, link.Currency)) > 0,
 				"cardToken":   sandbox && len(s.app.Router.CollectionRoute(domain.MethodCard, link.Currency)) > 0,
+				"stablecoin":  len(s.app.Router.CollectionRoute(domain.MethodStablecoin, link.Currency)) > 0,
 			}
 			return ok(w, map[string]any{"code": link.Code, "description": link.Description, "amount": link.Amount,
 				"currency": link.Currency, "isActive": link.IsActive, "expiresAt": link.ExpiresAt, "methods": methods, "sandbox": sandbox})
@@ -743,7 +744,7 @@ func (s *Server) mapPayments() {
 			if err := decode(r, &req); err != nil {
 				return err
 			}
-			method, err := enumOr("method", req.Method, domain.MethodCard, domain.MethodCard, domain.MethodMobileMoney)
+			method, err := enumOr("method", req.Method, domain.MethodCard, domain.MethodCard, domain.MethodMobileMoney, domain.MethodStablecoin)
 			if err != nil {
 				return err
 			}
@@ -765,13 +766,31 @@ func (s *Server) mapPayments() {
 				return err
 			}
 			// The payer sees the payment's outcome, never the merchant's records.
-			response := map[string]any{"reference": view.Reference, "status": view.Status, "amount": view.Amount, "currency": view.Currency,
+			response := map[string]any{"reference": view.Reference, "paymentId": view.FlowRecordID, "status": view.Status, "amount": view.Amount, "currency": view.Currency,
 				"failureCode": view.DeclineCode, "providerReference": view.ProviderReference}
 			if view.NextAction != nil {
 				response["nextAction"] = view.NextAction
 			}
 			return created(w, "/pay/"+link.Code, response)
 		}})
+
+	s.add(route{method: "GET", path: "/pay/{code}/payments/{id}", tag: tagLinks, access: public, publicLimit: true, edge: true,
+		summary: "Hosted checkout: this link's payment status",
+		handle: withID(func(w http.ResponseWriter, r *http.Request, id uuidT) error {
+			payment, err := s.app.Links.PaymentStatus(r.Context(), chi.URLParam(r, "code"), id)
+			if err != nil {
+				return err
+			}
+			status := "Processing"
+			if payment.Status == domain.PaymentSucceeded {
+				status = "Completed"
+			}
+			if payment.Status == domain.PaymentFailed {
+				status = "Failed"
+			}
+			return ok(w, map[string]any{"paymentId": payment.ID, "status": status, "amount": payment.Amount, "currency": payment.Currency,
+				"failureCode": payment.FailureCode, "providerReference": payment.ProviderReference})
+		})})
 
 	s.mapPayouts()
 	s.mapDisputes()

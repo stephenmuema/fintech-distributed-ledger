@@ -207,9 +207,9 @@ func (collectionFlow) prepare(a *App, q store.Q, p *prepared) error {
 	if p.currency != merchant.Currency {
 		return domain.Rule("currency_mismatch", "Account %s is %s; the payment is %s.", merchant.AccountNumber, merchant.Currency, p.currency)
 	}
-	method, ok := domain.ParseEnum(firstNonEmpty(p.field("method"), string(domain.MethodCard)), domain.MethodCard, domain.MethodMobileMoney)
+	method, ok := domain.ParseEnum(firstNonEmpty(p.field("method"), string(domain.MethodCard)), domain.MethodCard, domain.MethodMobileMoney, domain.MethodStablecoin)
 	if !ok {
-		return domain.Rule("invalid_method", "Method must be Card or MobileMoney.")
+		return domain.Rule("invalid_method", "Method must be Card, MobileMoney or Stablecoin.")
 	}
 	source, err := requireField(p, "source", "Source (card token, MSISDN or hosted_checkout)")
 	if err != nil {
